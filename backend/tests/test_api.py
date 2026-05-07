@@ -222,10 +222,10 @@ class TestDiagnoseWebSocket:
 
     @pytest.mark.asyncio
     async def test_ws_debate_stream(self):
-        """Full debate should stream agent messages then a result."""
+        """Full AVD+DDP flow should stream AVD assessment, agent messages, then result."""
         from starlette.testclient import TestClient
 
-        from app.schemas import DiagnosisContext
+        from app.schemas import AVDAssessment, AVDStatus, DiagnosisContext
 
         # Inject a session
         sid = "ws_test_session"
@@ -235,9 +235,19 @@ class TestDiagnoseWebSocket:
             "result": None,
         }
 
-        # Mock the orchestrator to return a canned result
+        # Mock the VLM so AVDEngine.assess returns SUFFICIENT
         mock_vlm = MagicMock()
         app.state.vlm = mock_vlm
+
+        # AVDEngine calls vlm.generate for assessment — return a
+        # "sufficient" JSON so it proceeds straight to DDP.
+        import json as _json
+
+        avd_sufficient_json = _json.dumps({
+            "sufficient": True,
+            "confidence": 0.9,
+            "current_assessment": "信息充分",
+        })
 
         async def fake_run_debate(context, on_message=None):
             # Fire agent messages through the callback, yielding
@@ -250,10 +260,22 @@ class TestDiagnoseWebSocket:
             return DUMMY_RESULT
 
         with patch(
+            "app.api.websocket.AVDEngine"
+        ) as MockAVD, patch(
             "app.api.websocket.DDPOrchestrator"
         ) as MockOrch:
-            instance = MockOrch.return_value
-            instance.run_debate = AsyncMock(side_effect=fake_run_debate)
+            # AVDEngine mock — assess returns SUFFICIENT
+            avd_instance = MockAVD.return_value
+            avd_instance.assess = AsyncMock(return_value=AVDAssessment(
+                status=AVDStatus.SUFFICIENT,
+                confidence=0.9,
+                question=None,
+                summary="信息充分，可以进行诊断。",
+            ))
+
+            # DDPOrchestrator mock
+            orch_instance = MockOrch.return_value
+            orch_instance.run_debate = AsyncMock(side_effect=fake_run_debate)
 
             with TestClient(app) as tc:
                 with tc.websocket_connect(f"/ws/diagnose/{sid}") as ws:
@@ -266,8 +288,9 @@ class TestDiagnoseWebSocket:
                         except Exception:
                             break
 
-        # Should have: 1 status + 4 agent messages + 1 result = 6
+        # Should have: 1 avd_sufficient + 1 status + 4 agent_message + 1 result = 7
         types = [m["type"] for m in collected]
+        assert "avd_sufficient" in types
         assert "status" in types
         assert types.count("agent_message") == 4
         assert "result" in types
