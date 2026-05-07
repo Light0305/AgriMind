@@ -253,11 +253,17 @@ class DebateResult:
 
 ### 5.2 微调方案
 
-- 方法：LoRA (rank=16, alpha=32)
-- 框架：PEFT + Transformers + DeepSpeed ZeRO-2
+- 方法：**QLoRA**（4-bit量化基座 + LoRA适配器, rank=16, alpha=32）
+- 框架：PEFT + Transformers + bitsandbytes（4-bit量化）
+- 梯度策略：gradient checkpointing（单卡无需DeepSpeed）
 - 训练数据：约 5000-8000 条指令微调样本（见6.2节）
-- 训练时长预估：单卡 A100 约 8-12 小时，单卡 4090 约 16-20 小时
-- 显存需求：约 20-24GB（7B模型 + LoRA，4090可运行）
+- 训练时长预估：单卡 4090 约 12-16 小时
+- 显存占用：约 14-18GB（4-bit模型~5GB + LoRA + 梯度 + 激活值）
+- batch size: 1，gradient accumulation steps: 8（等效batch=8）
+
+注意：使用QLoRA而非普通LoRA，因为Qwen2.5-VL-7B在bf16下约14GB，
+加上训练开销会超出4090的24GB限制。4-bit量化将模型压缩到~5GB，
+为训练腾出足够空间。推理时同样使用4-bit量化版本。
 
 ### 5.3 RAG 知识检索
 
@@ -332,9 +338,11 @@ Arbiter: "综合双方意见，最终判定为..."
 生成方式：编写 Python 脚本，批量调用大模型生成。一次跑完，不需要人工参与。
 
 生成模型选择（按优先级）：
-1. 服务器本地推理 Qwen2.5-VL-32B（若显存≥40GB，用AWQ/GPTQ量化可在24GB上跑）
-2. 通义千问 DashScope API（新用户有免费额度，超出后按量计费约几十元）
-3. 服务器本地推理 Qwen2.5-VL-7B（效果稍差但零成本保底方案）
+1. 通义千问 DashScope API 调用 Qwen2.5-VL-72B（质量最高，新用户有免费额度，超出按量付费约几十元）
+2. 服务器本地推理 Qwen2.5-VL-7B-AWQ（4-bit量化，4090可流畅运行，质量略低但零成本）
+
+注意：服务器为单卡4090(24GB)，32B模型即使量化后推理也较勉强，
+优先使用API获得最佳质量，7B本地推理作为零成本保底方案。
 
 ### 6.3 数据质量保证（自动化）
 
@@ -428,8 +436,8 @@ Arbiter: "综合双方意见，最终判定为..."
 | 组件 | 选型 | 费用 |
 |------|------|------|
 | 多模态基座 | Qwen2.5-VL-7B | 免费开源 |
-| 微调框架 | LoRA (PEFT) + DeepSpeed | 免费开源 |
-| Benchmark数据生成 | Qwen2.5-VL-32B本地推理 / DashScope API | 免费或极低成本 |
+| 微调框架 | QLoRA (PEFT + bitsandbytes) | 免费开源 |
+| Benchmark数据生成 | DashScope API (Qwen2.5-VL-72B) / 本地7B保底 | 免费或极低成本 |
 | Agent编排 | LangGraph 或 纯Python | 免费开源 |
 | 向量数据库 | ChromaDB | 免费本地 |
 | 嵌入模型 | BGE-M3 | 免费开源 |
@@ -482,6 +490,6 @@ Arbiter: "综合双方意见，最终判定为..."
 |------|------|------|------|
 | VLM微调效果不理想 | 中 | 高 | 尝试不同LoRA rank/数据配比；必要时换InternVL2 |
 | DDP辩论不收敛（Agent无意义争论）| 低 | 中 | 严格约束输出格式；限制2轮强制裁定 |
-| 推理延迟过长 | 中 | 中 | vLLM加速推理；缩短prompt；2轮辩论已是最少 |
+| 推理延迟过长 | 中 | 中 | vLLM加速4-bit推理；4090上单次VLM调用约3-5秒，DDP全流程（3次调用）约15-20秒，可接受 |
 | 数据集质量不够 | 低 | 高 | 自一致性过滤 + 格式校验双重保障；必要时调高一致性阈值 |
 | 前端开发工作量大 | 中 | 低 | 优先核心交互，视觉打磨最后做；可用shadcn/ui组件库加速 |
