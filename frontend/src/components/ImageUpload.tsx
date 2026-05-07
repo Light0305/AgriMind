@@ -2,7 +2,7 @@ import { useCallback, useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 interface ImageUploadProps {
-  onUpload: (file: File) => void
+  onUpload: (file: File) => void | Promise<void>
   images?: string[]
   disabled?: boolean
 }

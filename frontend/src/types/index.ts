@@ -34,11 +34,12 @@ export interface DebateResult {
 
 export interface DiagnosisSession {
   id: string
-  status: 'idle' | 'uploading' | 'questioning' | 'debating' | 'complete'
+  status: 'idle' | 'uploading' | 'questioning' | 'debating' | 'complete' | 'error'
   images: string[]
   messages: AgentMessage[]
   chatMessages: ChatMessage[]
   result?: DebateResult
+  error?: string
 }
 
 // --- AVD types ---
@@ -47,17 +48,20 @@ export interface AVDQuestion {
   question: string
   reason: string
   target_part: string
-}
-
-export interface AVDAssessment {
-  status: 'questioning' | 'sufficient' | 'forced'
   confidence: number
-  question?: AVDQuestion
   summary: string
 }
 
+export interface AVDSufficient {
+  summary: string
+  confidence: number
+  forced: boolean
+}
+
+// --- RAG / Retrieval types (aligned with backend schemas) ---
+
 export interface SimilarCase {
-  image_url: string
+  image_path: string
   label: string
   similarity: number
   source: string
@@ -93,4 +97,16 @@ export type WSMessageType =
 export interface WSMessage {
   type: WSMessageType
   data: unknown
+}
+
+// --- API response types ---
+
+export interface CreateDiagnosisResponse {
+  session_id: string
+  status: string
+}
+
+export interface UploadImageResponse {
+  session_id: string
+  image_count: number
 }

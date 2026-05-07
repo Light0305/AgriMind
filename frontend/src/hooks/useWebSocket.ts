@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import type { AgentMessage, ChatMessage, WSMessage, DebateResult } from '../types'
+import type { AgentMessage, AVDQuestion, AVDSufficient, ChatMessage, WSMessage, DebateResult } from '../types'
+
+/* ── Return type ────────────────────────────────────────── */
 
 interface UseWebSocketReturn {
   agentMessages: AgentMessage[]
@@ -7,22 +9,36 @@ interface UseWebSocketReturn {
   result: DebateResult | null
   isConnected: boolean
   error: string | null
+  /** True once the server has sent "status: debating" */
+  isDebating: boolean
+  /** True once the server has sent a "result" message */
+  isComplete: boolean
+  /** Send a JSON payload over the WebSocket */
   sendMessage: (data: unknown) => void
 }
+
+/* ── ID generator ───────────────────────────────────────── */
 
 let chatIdCounter = 0
 function nextChatId(): string {
   return `ws-${Date.now()}-${++chatIdCounter}`
 }
 
+/* ── Hook ───────────────────────────────────────────────── */
+
 export function useWebSocket(sessionId: string | null): UseWebSocketReturn {
   const [agentMessages, setAgentMessages] = useState<AgentMessage[]>([])
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [result, setResult] = useState<DebateResult | null>(null)
   const [isConnected, setIsConnected] = useState(false)
+  const [isDebating, setIsDebating] = useState(false)
+  const [isComplete, setIsComplete] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** Prevent reconnect after a clean close (result received or user navigated away). */
+  const shouldReconnect = useRef(true)
 
   const connect = useCallback(() => {
     if (!sessionId) return
@@ -55,12 +71,15 @@ export function useWebSocket(sessionId: string | null): UseWebSocketReturn {
           }
 
           case 'avd_question': {
+            const q = msg.data as AVDQuestion
             const chatMsg: ChatMessage = {
               id: nextChatId(),
               role: 'system',
-              content: typeof msg.data === 'object' && msg.data !== null
-                ? (msg.data as { question?: string }).question ?? JSON.stringify(msg.data)
-                : String(msg.data),
+              content: [
+                q.question,
+                q.reason ? `\n\n> ${q.reason}` : '',
+                q.target_part ? `\n\n请拍摄：**${q.target_part}**` : '',
+              ].join(''),
               timestamp: Date.now(),
             }
             setChatMessages((prev) => [...prev, chatMsg])
@@ -68,10 +87,13 @@ export function useWebSocket(sessionId: string | null): UseWebSocketReturn {
           }
 
           case 'avd_sufficient': {
+            const s = msg.data as AVDSufficient
             const chatMsg: ChatMessage = {
               id: nextChatId(),
               role: 'system',
-              content: '信息采集完成，正在进入专家辩论阶段...',
+              content: s.forced
+                ? `信息采集已结束（用户跳过）。${s.summary}\n正在进入专家辩论阶段...`
+                : `信息采集完成（置信度 ${Math.round(s.confidence * 100)}%）。${s.summary}\n正在进入专家辩论阶段...`,
               timestamp: Date.now(),
             }
             setChatMessages((prev) => [...prev, chatMsg])
@@ -79,14 +101,14 @@ export function useWebSocket(sessionId: string | null): UseWebSocketReturn {
           }
 
           case 'status': {
+            const d = msg.data as { status?: string; message?: string }
+            if (d.status === 'debating') {
+              setIsDebating(true)
+            }
             const chatMsg: ChatMessage = {
               id: nextChatId(),
               role: 'system',
-              content: String(
-                typeof msg.data === 'object' && msg.data !== null
-                  ? (msg.data as { message?: string }).message ?? JSON.stringify(msg.data)
-                  : msg.data,
-              ),
+              content: d.message ?? (d.status === 'debating' ? '专家辩论已开始...' : JSON.stringify(d)),
               timestamp: Date.now(),
             }
             setChatMessages((prev) => [...prev, chatMsg])
@@ -95,15 +117,15 @@ export function useWebSocket(sessionId: string | null): UseWebSocketReturn {
 
           case 'result': {
             setResult(msg.data as DebateResult)
+            setIsComplete(true)
+            setIsDebating(false)
+            shouldReconnect.current = false
             break
           }
 
           case 'error': {
-            setError(
-              typeof msg.data === 'string'
-                ? msg.data
-                : (msg.data as { message?: string }).message ?? '发生未知错误',
-            )
+            const errData = msg.data as { message?: string }
+            setError(errData.message ?? '发生未知错误')
             break
           }
         }
@@ -123,9 +145,12 @@ export function useWebSocket(sessionId: string | null): UseWebSocketReturn {
     ws.onclose = () => {
       setIsConnected(false)
       wsRef.current = null
-      reconnectTimer.current = setTimeout(() => {
-        connect()
-      }, 2000)
+      // Only reconnect if we haven't completed / aren't being torn down
+      if (shouldReconnect.current) {
+        reconnectTimer.current = setTimeout(() => {
+          connect()
+        }, 2000)
+      }
     }
 
     ws.onerror = () => {
@@ -134,13 +159,19 @@ export function useWebSocket(sessionId: string | null): UseWebSocketReturn {
   }, [sessionId])
 
   useEffect(() => {
+    // Reset state when session changes
     setAgentMessages([])
     setChatMessages([])
     setResult(null)
     setError(null)
+    setIsDebating(false)
+    setIsComplete(false)
+    shouldReconnect.current = true
+
     connect()
 
     return () => {
+      shouldReconnect.current = false
       if (reconnectTimer.current) {
         clearTimeout(reconnectTimer.current)
       }
@@ -157,5 +188,14 @@ export function useWebSocket(sessionId: string | null): UseWebSocketReturn {
     }
   }, [])
 
-  return { agentMessages, chatMessages, result, isConnected, error, sendMessage }
+  return {
+    agentMessages,
+    chatMessages,
+    result,
+    isConnected,
+    error,
+    isDebating,
+    isComplete,
+    sendMessage,
+  }
 }

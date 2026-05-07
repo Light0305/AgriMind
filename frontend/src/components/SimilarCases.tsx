@@ -86,11 +86,11 @@ export default function SimilarCases({
           >
             <button
               type="button"
-              onClick={() => setEnlargedUrl(c.image_url)}
+              onClick={() => setEnlargedUrl(c.image_path)}
               className="w-full aspect-square rounded-lg overflow-hidden mb-2 cursor-zoom-in bg-gray-100"
             >
               <img
-                src={c.image_url}
+                src={c.image_path}
                 alt={c.label}
                 className="w-full h-full object-cover"
                 onError={(e) => {

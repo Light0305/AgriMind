@@ -8,13 +8,13 @@ import DiagnosisReport from '../components/DiagnosisReport'
 import SimilarCases from '../components/SimilarCases'
 import { useDiagnosis } from '../hooks/useDiagnosis'
 
-/* ── status label map  ───────────────────────────────────── */
+/* -- status label map  --------------------------------------------------- */
 
 const statusLabels: Record<string, { text: string; dot: string }> = {
   idle: { text: '就绪 — 请上传病害图片', dot: 'bg-gray-400' },
   uploading: { text: '正在上传...', dot: 'bg-blue-500 animate-pulse' },
   questioning: {
-    text: 'AI 问诊中 — 请回答问题或点击"开始诊断"',
+    text: 'AI 问诊中 — 请回答问题或点击"跳过问诊"',
     dot: 'bg-amber-500 animate-pulse',
   },
   debating: {
@@ -22,9 +22,10 @@ const statusLabels: Record<string, { text: string; dot: string }> = {
     dot: 'bg-yellow-500 animate-pulse',
   },
   complete: { text: '诊断完成', dot: 'bg-emerald-500' },
+  error: { text: '出现错误', dot: 'bg-red-500' },
 }
 
-/* ── main page ───────────────────────────────────────────── */
+/* -- main page ----------------------------------------------------------- */
 
 export default function DiagnosisPage() {
   const {
@@ -32,7 +33,7 @@ export default function DiagnosisPage() {
     uploadImage,
     addChatImage,
     sendChatMessage,
-    startDiagnosis,
+    skipToDebate,
   } = useDiagnosis()
 
   const [activeTab, setActiveTab] = useState<'chat' | 'debate'>('chat')
@@ -55,9 +56,9 @@ export default function DiagnosisPage() {
 
   return (
     <div className="flex-1 flex flex-col gap-6 p-6">
-      {/* ── Top: two-column layout ─────────────────────── */}
+      {/* -- Top: two-column layout ----------------------------------- */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
-        {/* ─── Left column: images ─────────────────────── */}
+        {/* --- Left column: images ----------------------------------- */}
         <div className="lg:col-span-4 xl:col-span-3 flex flex-col gap-4">
           {/* Upload card */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
@@ -67,7 +68,7 @@ export default function DiagnosisPage() {
             <ImageUpload
               onUpload={uploadImage}
               images={images}
-              disabled={status === 'debating'}
+              disabled={status === 'debating' || status === 'uploading'}
             />
           </div>
 
@@ -106,20 +107,27 @@ export default function DiagnosisPage() {
             </div>
           )}
 
-          {/* Start diagnosis button */}
+          {/* Skip-to-debate button (replaces "startDiagnosis") */}
           <AnimatePresence>
             {status === 'questioning' && (
               <motion.button
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                onClick={startDiagnosis}
+                onClick={skipToDebate}
                 className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-sm transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
               >
-                {'\u{1F680}'} 开始 AI 辩论诊断
+                {'\u{1F680}'} 跳过问诊，直接 AI 辩论诊断
               </motion.button>
             )}
           </AnimatePresence>
+
+          {/* Error display */}
+          {session?.error && (
+            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
+              {session.error}
+            </div>
+          )}
 
           {/* Status indicator */}
           <div className="flex items-center gap-2 text-sm text-gray-500 px-1">
@@ -128,7 +136,7 @@ export default function DiagnosisPage() {
           </div>
         </div>
 
-        {/* ─── Right column: chat / debate ─────────────── */}
+        {/* --- Right column: chat / debate ----------------------------- */}
         <div className="lg:col-span-8 xl:col-span-9 flex flex-col bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
           {/* Tab bar */}
           <div className="flex border-b border-gray-200">
@@ -175,14 +183,14 @@ export default function DiagnosisPage() {
               <ChatPanel
                 messages={session?.chatMessages ?? []}
                 onSend={sendChatMessage}
-                onImageAdd={addChatImage}
+                onImageAdd={status === 'questioning' ? addChatImage : undefined}
                 isThinking={
                   status === 'questioning' &&
                   (session?.chatMessages?.length ?? 0) > 0 &&
                   session!.chatMessages[session!.chatMessages.length - 1].role ===
                     'user'
                 }
-                disabled={status === 'debating' || status === 'complete'}
+                disabled={status === 'debating' || status === 'complete' || status === 'idle'}
               />
             ) : (
               <DebateViewer
@@ -194,7 +202,7 @@ export default function DiagnosisPage() {
         </div>
       </div>
 
-      {/* ── Bottom: diagnosis report (slides up) ───────── */}
+      {/* -- Bottom: diagnosis report (slides up) ---------------------- */}
       <AnimatePresence>
         {hasResult && session?.result && (
           <motion.div

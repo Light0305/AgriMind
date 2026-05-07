@@ -1,69 +1,134 @@
-import { useState, useCallback } from 'react'
-import type { DiagnosisSession, ChatMessage } from '../types'
+import { useState, useCallback, useEffect, useRef } from 'react'
+import type {
+  DiagnosisSession,
+  ChatMessage,
+  CreateDiagnosisResponse,
+  UploadImageResponse,
+} from '../types'
 import { useWebSocket } from './useWebSocket'
+
+/* ── ID generator ───────────────────────────────────────── */
 
 let chatIdSeq = 0
 function nextId(): string {
   return `diag-${Date.now()}-${++chatIdSeq}`
 }
 
+/* ── Public API ─────────────────────────────────────────── */
+
 interface UseDiagnosisReturn {
   session: DiagnosisSession | null
-  uploadImage: (file: File) => Promise<void>
-  addChatImage: (file: File) => void
+  /** Upload initial image(s) to create a diagnosis session */
+  uploadImage: (file: File, context?: string) => Promise<void>
+  /** Upload an additional image during AVD questioning */
+  addChatImage: (file: File) => Promise<void>
+  /** Send a text chat message (unused for now but keeps the chat panel wired) */
   sendChatMessage: (text: string) => void
-  startDiagnosis: () => Promise<void>
+  /** Skip AVD and jump directly to DDP debate */
+  skipToDebate: () => void
 }
+
+/* ── Hook ───────────────────────────────────────────────── */
 
 export function useDiagnosis(): UseDiagnosisReturn {
   const [session, setSession] = useState<DiagnosisSession | null>(null)
 
-  const wsSessionId =
-    session && (session.status === 'questioning' || session.status === 'debating')
-      ? session.id
-      : null
+  // --- Determine when to connect the WebSocket ---
+  // Connect as soon as we have a session id (right after POST /api/diagnose).
+  // The backend starts AVD immediately upon WS connection.
+  const wsSessionId = session?.id || null
 
   const ws = useWebSocket(wsSessionId)
 
-  // Sync WS agent messages into session
-  if (
-    session &&
-    ws.agentMessages.length > 0 &&
-    session.messages.length !== ws.agentMessages.length
-  ) {
-    setSession((prev) => (prev ? { ...prev, messages: ws.agentMessages } : prev))
-  }
+  // --- Sync WS state into session via effects (not during render) ---
 
-  // Sync WS chat messages into session
-  if (
-    session &&
-    ws.chatMessages.length > 0 &&
-    session.chatMessages.length !== ws.chatMessages.length
-  ) {
-    setSession((prev) => (prev ? { ...prev, chatMessages: ws.chatMessages } : prev))
-  }
+  const prevAgentLen = useRef(0)
+  const prevChatLen = useRef(0)
 
-  // Sync result
-  if (session && ws.result && !session.result) {
-    setSession((prev) =>
-      prev ? { ...prev, status: 'complete', result: ws.result! } : prev,
-    )
-  }
+  useEffect(() => {
+    if (!session) return
+    if (ws.agentMessages.length > prevAgentLen.current) {
+      prevAgentLen.current = ws.agentMessages.length
+      setSession((prev) =>
+        prev ? { ...prev, messages: ws.agentMessages } : prev,
+      )
+    }
+  }, [ws.agentMessages, session])
 
-  const uploadImage = useCallback(async (file: File) => {
-    setSession((prev) => {
-      if (prev) return { ...prev, status: 'uploading' as const }
-      return {
-        id: '',
-        status: 'uploading' as const,
-        images: [],
-        messages: [],
-        chatMessages: [],
-      }
+  useEffect(() => {
+    if (!session) return
+    if (ws.chatMessages.length > prevChatLen.current) {
+      prevChatLen.current = ws.chatMessages.length
+      setSession((prev) =>
+        prev ? { ...prev, chatMessages: [...(prev.chatMessages ?? []), ...ws.chatMessages.slice(prev.chatMessages.length)] } : prev,
+      )
+    }
+  }, [ws.chatMessages, session])
+
+  // Transition to "questioning" when WS connects and AVD hasn't finished
+  useEffect(() => {
+    if (!session) return
+    if (ws.isConnected && session.status === 'uploading') {
+      setSession((prev) =>
+        prev ? { ...prev, status: 'questioning' } : prev,
+      )
+    }
+  }, [ws.isConnected, session])
+
+  // Transition to "debating" when server signals
+  useEffect(() => {
+    if (!session) return
+    if (ws.isDebating && session.status !== 'debating') {
+      setSession((prev) =>
+        prev ? { ...prev, status: 'debating' } : prev,
+      )
+    }
+  }, [ws.isDebating, session])
+
+  // Transition to "complete" when result arrives
+  useEffect(() => {
+    if (!session) return
+    if (ws.result && !session.result) {
+      setSession((prev) =>
+        prev ? { ...prev, status: 'complete', result: ws.result! } : prev,
+      )
+    }
+  }, [ws.result, session])
+
+  // Surface WS errors
+  useEffect(() => {
+    if (!session) return
+    if (ws.error) {
+      setSession((prev) =>
+        prev ? { ...prev, error: ws.error ?? undefined } : prev,
+      )
+    }
+  }, [ws.error, session])
+
+  // --- Actions ---
+
+  /**
+   * Upload the initial image and create a diagnosis session.
+   * The backend expects FormData with field name `files` (list[UploadFile]).
+   */
+  const uploadImage = useCallback(async (file: File, context?: string) => {
+    // Reset ref counters for a new session
+    prevAgentLen.current = 0
+    prevChatLen.current = 0
+
+    setSession({
+      id: '',
+      status: 'uploading',
+      images: [],
+      messages: [],
+      chatMessages: [],
     })
 
     const formData = new FormData()
-    formData.append('file', file)
+    formData.append('files', file)
+    if (context) {
+      formData.append('context', context)
+    }
 
     try {
       const resp = await fetch('/api/diagnose', {
@@ -71,96 +136,139 @@ export function useDiagnosis(): UseDiagnosisReturn {
         body: formData,
       })
 
-      if (!resp.ok) throw new Error(`Upload failed: ${resp.status}`)
+      if (!resp.ok) {
+        const text = await resp.text()
+        throw new Error(`Upload failed (${resp.status}): ${text}`)
+      }
 
-      const data = await resp.json()
+      const data: CreateDiagnosisResponse = await resp.json()
 
       setSession((prev) => ({
-        id: data.session_id ?? prev?.id ?? '',
-        status: 'questioning' as const,
-        images: [...(prev?.images ?? []), URL.createObjectURL(file)],
+        id: data.session_id,
+        status: 'uploading', // will transition to 'questioning' when WS connects
+        images: [URL.createObjectURL(file)],
         messages: prev?.messages ?? [],
         chatMessages: prev?.chatMessages ?? [],
       }))
     } catch (err) {
+      const message = err instanceof Error ? err.message : '上传失败'
       console.error('Upload error:', err)
       setSession((prev) =>
-        prev ? { ...prev, status: 'questioning' as const } : prev,
+        prev
+          ? { ...prev, status: 'error', error: message }
+          : { id: '', status: 'error', images: [], messages: [], chatMessages: [], error: message },
       )
     }
   }, [])
 
-  const addChatImage = useCallback((file: File) => {
-    const url = URL.createObjectURL(file)
+  /**
+   * Upload an additional image mid-conversation (during AVD).
+   * Posts to POST /api/diagnose/{session_id}/upload, then tells the WS
+   * to continue with `{ action: "continue" }`.
+   */
+  const addChatImage = useCallback(async (file: File) => {
+    if (!session?.id) return
+
+    const localUrl = URL.createObjectURL(file)
+
+    // Optimistically add to chat + images
+    const userMsg: ChatMessage = {
+      id: nextId(),
+      role: 'user',
+      content: '',
+      imageUrl: localUrl,
+      timestamp: Date.now(),
+    }
     setSession((prev) => {
       if (!prev) return prev
-      const msg: ChatMessage = {
-        id: nextId(),
-        role: 'user',
-        content: '',
-        imageUrl: url,
-        timestamp: Date.now(),
-      }
       return {
         ...prev,
-        images: [...prev.images, url],
-        chatMessages: [...prev.chatMessages, msg],
+        images: [...prev.images, localUrl],
+        chatMessages: [...prev.chatMessages, userMsg],
       }
     })
 
-    // Also upload to server
-    const formData = new FormData()
-    formData.append('file', file)
-    if (session?.id) {
-      formData.append('session_id', session.id)
-    }
-    fetch('/api/diagnose/image', { method: 'POST', body: formData }).catch(
-      console.error,
-    )
-  }, [session?.id])
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
 
+      const resp = await fetch(`/api/diagnose/${session.id}/upload`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!resp.ok) {
+        throw new Error(`Image upload failed: ${resp.status}`)
+      }
+
+      await resp.json() as UploadImageResponse
+
+      // Tell the WS to re-assess with the new image
+      ws.sendMessage({ action: 'continue' })
+    } catch (err) {
+      console.error('Additional image upload error:', err)
+      const errMsg: ChatMessage = {
+        id: nextId(),
+        role: 'system',
+        content: '图片上传失败，请重试。',
+        timestamp: Date.now(),
+      }
+      setSession((prev) =>
+        prev
+          ? { ...prev, chatMessages: [...prev.chatMessages, errMsg] }
+          : prev,
+      )
+    }
+  }, [session?.id, ws])
+
+  /**
+   * Send a text message in the chat panel.
+   * If the user types "skip" / "没有了" / "跳过", we treat it as a skip action.
+   */
   const sendChatMessage = useCallback(
     (text: string) => {
       if (!text.trim()) return
-      setSession((prev) => {
-        if (!prev) return prev
-        const msg: ChatMessage = {
-          id: nextId(),
-          role: 'user',
-          content: text,
-          timestamp: Date.now(),
-        }
-        return { ...prev, chatMessages: [...prev.chatMessages, msg] }
-      })
-      ws.sendMessage({ type: 'user_reply', content: text })
+
+      const userMsg: ChatMessage = {
+        id: nextId(),
+        role: 'user',
+        content: text,
+        timestamp: Date.now(),
+      }
+      setSession((prev) =>
+        prev
+          ? { ...prev, chatMessages: [...prev.chatMessages, userMsg] }
+          : prev,
+      )
+
+      // Check if user wants to skip AVD
+      const lower = text.trim().toLowerCase()
+      if (['skip', '跳过', '没有了', '不需要了', '直接诊断'].includes(lower)) {
+        ws.sendMessage({ action: 'skip' })
+      }
     },
     [ws],
   )
 
-  const startDiagnosis = useCallback(async () => {
-    if (!session?.id) return
+  /**
+   * Skip the AVD questioning phase and proceed directly to DDP debate.
+   * Sends `{ action: "skip" }` over the WebSocket.
+   */
+  const skipToDebate = useCallback(() => {
+    ws.sendMessage({ action: 'skip' })
 
-    setSession((prev) => (prev ? { ...prev, status: 'debating' as const } : prev))
-
-    try {
-      const resp = await fetch(`/api/diagnose/${session.id}/start`, {
-        method: 'POST',
-      })
-
-      if (!resp.ok) throw new Error(`Start failed: ${resp.status}`)
-
-      const result = await resp.json()
-
-      if (result.final_diagnosis) {
-        setSession((prev) =>
-          prev ? { ...prev, status: 'complete' as const, result } : prev,
-        )
-      }
-      // Otherwise, results come via WebSocket
-    } catch {
-      // Stay in debating — WebSocket handles streaming
+    const skipMsg: ChatMessage = {
+      id: nextId(),
+      role: 'user',
+      content: '跳过问诊，直接开始辩论诊断',
+      timestamp: Date.now(),
     }
-  }, [session?.id])
+    setSession((prev) =>
+      prev
+        ? { ...prev, chatMessages: [...prev.chatMessages, skipMsg] }
+        : prev,
+    )
+  }, [ws])
 
-  return { session, uploadImage, addChatImage, sendChatMessage, startDiagnosis }
+  return { session, uploadImage, addChatImage, sendChatMessage, skipToDebate }
 }
