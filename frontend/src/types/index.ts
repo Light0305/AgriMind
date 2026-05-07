@@ -28,12 +28,69 @@ export interface DebateResult {
   uncertainty_notes: string[]
   debate_transcript: AgentMessage[]
   grounding_boxes: GroundingBox[]
+  treatment?: TreatmentInfo
+  similar_cases?: SimilarCase[]
 }
 
 export interface DiagnosisSession {
   id: string
-  status: 'uploading' | 'questioning' | 'debating' | 'complete'
+  status: 'idle' | 'uploading' | 'questioning' | 'debating' | 'complete'
   images: string[]
   messages: AgentMessage[]
+  chatMessages: ChatMessage[]
   result?: DebateResult
+}
+
+// --- AVD types ---
+
+export interface AVDQuestion {
+  question: string
+  reason: string
+  target_part: string
+}
+
+export interface AVDAssessment {
+  status: 'questioning' | 'sufficient' | 'forced'
+  confidence: number
+  question?: AVDQuestion
+  summary: string
+}
+
+export interface SimilarCase {
+  image_url: string
+  label: string
+  similarity: number
+  source: string
+}
+
+export interface TreatmentInfo {
+  text: string
+  source: string
+}
+
+// --- Chat message (unified for AVD panel) ---
+
+export type ChatMessageRole = 'system' | 'user' | 'assistant'
+
+export interface ChatMessage {
+  id: string
+  role: ChatMessageRole
+  content: string
+  imageUrl?: string
+  timestamp: number
+}
+
+// --- WebSocket ---
+
+export type WSMessageType =
+  | 'status'
+  | 'agent_message'
+  | 'avd_question'
+  | 'avd_sufficient'
+  | 'result'
+  | 'error'
+
+export interface WSMessage {
+  type: WSMessageType
+  data: unknown
 }
