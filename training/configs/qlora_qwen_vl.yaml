@@ -1,0 +1,44 @@
+model:
+  name_or_path: /home/user/work/lch/robot/models/qwen2.5-vl-7b
+  load_in_4bit: true
+  bnb_4bit_compute_dtype: bfloat16
+  bnb_4bit_quant_type: nf4
+  bnb_4bit_use_double_quant: true
+
+lora:
+  r: 16
+  lora_alpha: 32
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+  lora_dropout: 0.05
+  task_type: CAUSAL_LM
+
+training:
+  output_dir: checkpoints/agrimind-qlora
+  num_train_epochs: 3
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 8
+  learning_rate: 2.0e-4
+  warmup_ratio: 0.1
+  lr_scheduler_type: cosine
+  bf16: true
+  gradient_checkpointing: true
+  logging_steps: 10
+  save_steps: 200
+  save_total_limit: 3
+  dataloader_num_workers: 4
+  max_seq_length: 2048
+  remove_unused_columns: false
+
+data:
+  train_files:
+    - data/generated/single_diagnosis.jsonl
+    - data/generated/debate.jsonl
+    - data/generated/multiturn_avd.jsonl
+  val_split: 0.05
