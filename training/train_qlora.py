@@ -12,14 +12,13 @@ train_qlora.py — QLoRA 微调 Qwen2.5-VL-7B 用于农业病害诊断
 from __future__ import annotations
 
 import argparse
-import copy
 import json
 import logging
 import os
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 import torch
 import yaml
@@ -453,6 +452,11 @@ def main():
         default=None,
         help="从指定 checkpoint 恢复训练",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="加载模型和数据, 打印统计信息, 但不启动训练",
+    )
     args = parser.parse_args()
 
     # --- Load config ---
@@ -550,6 +554,38 @@ def main():
     logger.info("  Learning rate: %s", training_args.learning_rate)
     logger.info("  Max seq length: %d", train_cfg.get("max_seq_length", 2048))
     logger.info("  Output: %s", output_dir)
+
+    # --- Dry-run mode: print stats and exit ---
+    if args.dry_run:
+        logger.info("=" * 60)
+        logger.info("DRY-RUN 模式 — 跳过训练")
+        logger.info("=" * 60)
+        # Sample a single batch to verify data pipeline
+        try:
+            sample = train_dataset[0]
+            logger.info("  样本 0 — input_ids shape: %s", sample["input_ids"].shape)
+            logger.info("  样本 0 — labels 非 -100 tokens: %d / %d",
+                        (sample["labels"] != -100).sum().item(),
+                        sample["labels"].shape[0])
+            if "pixel_values" in sample:
+                logger.info("  样本 0 — pixel_values shape: %s", sample["pixel_values"].shape)
+            if "image_grid_thw" in sample:
+                logger.info("  样本 0 — image_grid_thw: %s", sample["image_grid_thw"])
+        except Exception as e:
+            logger.warning("  无法加载样本 0: %s", e)
+        # VRAM estimate
+        total_params = sum(p.numel() for p in model.parameters())
+        trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        logger.info("  总参数量: %.2f B", total_params / 1e9)
+        logger.info("  可训练参数: %.2f M (%.2f%%)",
+                    trainable_params / 1e6,
+                    100.0 * trainable_params / total_params)
+        if torch.cuda.is_available():
+            allocated = torch.cuda.memory_allocated() / 1024**3
+            reserved = torch.cuda.memory_reserved() / 1024**3
+            logger.info("  GPU 已分配: %.2f GB, 已预留: %.2f GB", allocated, reserved)
+        logger.info("Dry-run 完成, 退出.")
+        return
 
     resume_ckpt = args.resume_from_checkpoint
     if resume_ckpt and not Path(resume_ckpt).exists():

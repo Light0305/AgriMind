@@ -1,3 +1,6 @@
+# AgriMind QLoRA Training Configuration
+# Target: Qwen2.5-VL-7B on RTX 4090 (24GB VRAM)
+
 model:
   name_or_path: /home/user/work/lch/robot/models/qwen2.5-vl-7b
   load_in_4bit: true
@@ -38,7 +41,7 @@ training:
 
 data:
   train_files:
-    - data/generated/single_diagnosis.jsonl
-    - data/generated/debate.jsonl
-    - data/generated/multiturn_avd.jsonl
+    - data/processed/sft_single.jsonl
+    - data/processed/sft_debate.jsonl
+    - data/processed/sft_multiturn.jsonl
   val_split: 0.05
