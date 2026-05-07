@@ -23,7 +23,6 @@ _STUBS = [
     "peft",
     "bitsandbytes",
     "accelerate",
-    "chromadb",
 ]
 
 for _name in _STUBS:

@@ -106,3 +106,24 @@ class DebateResult(BaseModel):
     uncertainty_notes: list[str] = Field(default_factory=list)
     debate_transcript: list[AgentMessage]
     grounding_boxes: list[GroundingBox] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# RAG / Retrieval types
+# ---------------------------------------------------------------------------
+
+class RetrievedDocument(BaseModel):
+    """A knowledge chunk returned by RAG retrieval."""
+
+    content: str
+    source: str
+    score: float
+
+
+class SimilarCase(BaseModel):
+    """A visually similar case returned by image retrieval."""
+
+    image_path: str
+    label: str
+    similarity: float
+    source: str
