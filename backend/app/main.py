@@ -24,8 +24,14 @@ async def lifespan(app: FastAPI):
     startup is fast — the heavy weight load happens on the first actual
     inference request.
     """
-    logger.info("AgriMind starting up — VLM will lazy-load on first request")
-    app.state.vlm = VLMInference.from_config(settings)
+    vlm = VLMInference.from_config(settings)
+    if not vlm._use_api:
+        logger.info("Pre-loading local VLM model (this takes ~5s)...")
+        vlm._load_local()  # eager-load to avoid first-request timeout
+        logger.info("Model pre-loaded successfully")
+    else:
+        logger.info("API mode — skipping model pre-load")
+    app.state.vlm = vlm
     yield
     logger.info("AgriMind shutting down")
     app.state.vlm = None

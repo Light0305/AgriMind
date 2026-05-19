@@ -1,13 +1,5 @@
-import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import DiagnosisPage from './pages/DiagnosisPage'
-import ComparePage from './pages/ComparePage'
-import ExperimentPage from './pages/ExperimentPage'
-
-const navItems = [
-  { to: '/', label: '智能诊断' },
-  { to: '/compare', label: '对比演示' },
-  { to: '/experiments', label: '实验数据' },
-]
 
 export default function App() {
   return (
@@ -27,26 +19,6 @@ export default function App() {
                   作物病害智能诊断系统
                 </span>
               </div>
-
-              {/* Navigation */}
-              <nav className="flex items-center gap-1">
-                {navItems.map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    end={item.to === '/'}
-                    className={({ isActive }) =>
-                      `px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        isActive
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                      }`
-                    }
-                  >
-                    {item.label}
-                  </NavLink>
-                ))}
-              </nav>
             </div>
           </div>
         </header>
@@ -55,8 +27,6 @@ export default function App() {
         <main className="flex-1 flex flex-col max-w-7xl w-full mx-auto">
           <Routes>
             <Route path="/" element={<DiagnosisPage />} />
-            <Route path="/compare" element={<ComparePage />} />
-            <Route path="/experiments" element={<ExperimentPage />} />
           </Routes>
         </main>
 

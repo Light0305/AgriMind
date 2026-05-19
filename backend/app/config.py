@@ -9,15 +9,15 @@ class Settings(BaseSettings):
     """Central configuration consumed by VLMInference and FastAPI."""
 
     # ── Local model ──────────────────────────────────────────────────
-    model_path: str = "models/agrimind-v2"
+    model_path: str = "/home/user/robot/models/agrimind-v2"
     load_in_4bit: bool = True
     max_new_tokens: int = 1024
     temperature: float = 0.7
     device: str = "auto"
 
     # ── API mode (DashScope / OpenAI-compatible) ─────────────────────
-    # Default: API mode with test key — works out-of-box without GPU/model download.
-    api_key: str = "sk-1aa3647be3dc4122ba4a9487aab9d7da"
+    # Leave empty for local GPU mode. Set to use DashScope API (no GPU needed).
+    api_key: str = ""
     api_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     api_model: str = "qwen-vl-plus"
 

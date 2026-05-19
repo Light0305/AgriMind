@@ -240,10 +240,12 @@ export function useDiagnosis(): UseDiagnosisReturn {
           : prev,
       )
 
-      // Check if user wants to skip AVD
-      const lower = text.trim().toLowerCase()
+      // Send answer to AVD interview, or skip if user says so
+      const lower = text.trim()
       if (['skip', '跳过', '没有了', '不需要了', '直接诊断'].includes(lower)) {
         ws.sendMessage({ action: 'skip' })
+      } else {
+        ws.sendMessage({ action: 'continue', answer: text })
       }
     },
     [ws],

@@ -89,45 +89,48 @@ async def diagnose_ws(websocket: WebSocket, session_id: str):
                 return
             logger.info("Using local model")
 
-        # ── Build AVD session from DiagnosisContext ──────────────────
+        # ── Structured Interview (replaces photo-based AVD) ────────
         diag_ctx = session["context"]
-        avd_session = _build_avd_session(session_id, diag_ctx)
-        avd_sessions[session_id] = avd_session
+        collected_context: list[str] = []
+        if diag_ctx.user_context:
+            collected_context.append(diag_ctx.user_context)
 
-        avd_engine = AVDEngine(vlm)
+        # Structured questions: location → time → weather → symptoms
+        questions = [
+            ("location", "请问作物种植在哪个地区？（例如：陕西杨凌）"),
+            ("season", "目前是什么季节/月份？"),
+            ("weather", "近期天气情况如何？（例如：近期多雨、高温干旱等）"),
+            ("symptoms", "请描述您观察到的具体症状。"),
+        ]
 
-        # ── AVD loop: assess → maybe ask → reassess ─────────────────
-        assessment = await avd_engine.assess(avd_session)
-        await _send_avd_assessment(websocket, assessment)
-
-        while assessment.status == AVDStatus.QUESTIONING:
-            # Wait for the client to upload a new image and signal us.
+        for qid, question in questions:
+            await websocket.send_json({
+                "type": "avd_question",
+                "data": {
+                    "question": question,
+                    "reason": "",
+                    "target_part": qid,
+                    "step": questions.index((qid, question)) + 1,
+                    "total": len(questions),
+                },
+            })
             try:
-                msg = await websocket.receive_json()
+                msg = await asyncio.wait_for(websocket.receive_json(), timeout=120)
+            except asyncio.TimeoutError:
+                msg = {"action": "skip"}
             except WebSocketDisconnect:
-                logger.info("Client disconnected during AVD for session %s", session_id)
                 return
 
             action = msg.get("action") if isinstance(msg, dict) else None
             if action == "continue":
-                # Client uploaded a new image via REST — the session's
-                # DiagnosisContext was already updated.  Sync our AVD
-                # session with any new images in the context.
-                _sync_avd_session(avd_session, diag_ctx)
-                assessment = await avd_engine.assess(avd_session)
-                await _send_avd_assessment(websocket, assessment)
+                answer = str(msg.get("answer", "")).strip()
+                if answer:
+                    collected_context.append(f"{qid}: {answer}")
             elif action == "skip":
-                # User chose to skip further photos — force DDP.
-                assessment = AVDAssessment(
-                    status=AVDStatus.FORCED,
-                    confidence=assessment.confidence,
-                    question=None,
-                    summary="用户跳过补充拍照，直接进入诊断。",
-                )
-                await _send_avd_assessment(websocket, assessment)
-                break
-            else:
-                logger.warning("Unknown WS action %r, ignoring", action)
+                continue  # skip this question, proceed to next
+
+        # Build enriched context from interview answers
+        diag_ctx.user_context = "；".join(collected_context)
 
         # ── AVD done — proceed to DDP debate (v2 with retrievers) ────
         # Lazy-init retrievers so the debate benefits from RAG & case memory
