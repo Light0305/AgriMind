@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     """Central configuration consumed by VLMInference and FastAPI."""
 
     # ── Local model ──────────────────────────────────────────────────
-    model_path: str = "models/qwen2.5-vl-7b"
+    model_path: str = "models/agrimind-v2"
     load_in_4bit: bool = True
     max_new_tokens: int = 1024
     temperature: float = 0.7
