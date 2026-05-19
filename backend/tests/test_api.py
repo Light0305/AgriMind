@@ -235,23 +235,11 @@ class TestDiagnoseWebSocket:
             "result": None,
         }
 
-        # Mock the VLM so AVDEngine.assess returns SUFFICIENT
+        # Mock the VLM
         mock_vlm = MagicMock()
         app.state.vlm = mock_vlm
 
-        # AVDEngine calls vlm.generate for assessment — return a
-        # "sufficient" JSON so it proceeds straight to DDP.
-        import json as _json
-
-        avd_sufficient_json = _json.dumps({
-            "sufficient": True,
-            "confidence": 0.9,
-            "current_assessment": "信息充分",
-        })
-
         async def fake_run_debate(context, on_message=None):
-            # Fire agent messages through the callback, yielding
-            # between each to let the sender task drain the queue.
             msgs = DUMMY_RESULT.debate_transcript
             for m in msgs:
                 if on_message:
@@ -264,7 +252,6 @@ class TestDiagnoseWebSocket:
         ) as MockAVD, patch(
             "app.api.websocket.DDPOrchestrator"
         ) as MockOrch:
-            # AVDEngine mock — assess returns SUFFICIENT
             avd_instance = MockAVD.return_value
             avd_instance.assess = AsyncMock(return_value=AVDAssessment(
                 status=AVDStatus.SUFFICIENT,
@@ -273,28 +260,32 @@ class TestDiagnoseWebSocket:
                 summary="信息充分，可以进行诊断。",
             ))
 
-            # DDPOrchestrator mock
             orch_instance = MockOrch.return_value
             orch_instance.run_debate = AsyncMock(side_effect=fake_run_debate)
 
             with TestClient(app) as tc:
                 with tc.websocket_connect(f"/ws/diagnose/{sid}") as ws:
+                    # Send config message (required by new protocol)
+                    ws.send_json({"type": "config", "api_key": ""})
+
                     collected = []
-                    # Read messages until the connection closes
                     while True:
                         try:
                             msg = ws.receive_json()
                             collected.append(msg)
+                            # Answer interview questions automatically
+                            if msg.get("type") == "avd_question":
+                                ws.send_json({"action": "skip"})
                         except Exception:
                             break
 
-        # Should have: 1 avd_sufficient + 1 status + 4 agent_message + 1 result = 7
         types = [m["type"] for m in collected]
+        # 4 interview questions + 1 avd_sufficient + 1 status + 4 agent_message + 1 result
+        assert types.count("avd_question") == 4
         assert "avd_sufficient" in types
         assert "status" in types
         assert types.count("agent_message") == 4
         assert "result" in types
 
-        # The result should contain the diagnosis
         result_msg = next(m for m in collected if m["type"] == "result")
         assert result_msg["data"]["final_diagnosis"] == "小麦白粉病"

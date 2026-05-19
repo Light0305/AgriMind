@@ -57,10 +57,8 @@ export function useWebSocket(sessionId: string | null, apiKey?: string): UseWebS
         clearTimeout(reconnectTimer.current)
         reconnectTimer.current = null
       }
-      // Send API config if using API mode
-      if (apiKey) {
-        ws.send(JSON.stringify({ type: 'config', api_key: apiKey }))
-      }
+      // Always send config message — empty key means local mode
+      ws.send(JSON.stringify({ type: 'config', api_key: apiKey || '' }))
     }
 
     ws.onmessage = (event) => {
@@ -79,11 +77,7 @@ export function useWebSocket(sessionId: string | null, apiKey?: string): UseWebS
             const chatMsg: ChatMessage = {
               id: nextChatId(),
               role: 'system',
-              content: [
-                q.question,
-                q.reason ? `\n\n> ${q.reason}` : '',
-                q.target_part ? `\n\n请拍摄：**${q.target_part}**` : '',
-              ].join(''),
+              content: q.question,
               timestamp: Date.now(),
             }
             setChatMessages((prev) => [...prev, chatMsg])
@@ -149,12 +143,7 @@ export function useWebSocket(sessionId: string | null, apiKey?: string): UseWebS
     ws.onclose = () => {
       setIsConnected(false)
       wsRef.current = null
-      // Only reconnect if we haven't completed / aren't being torn down
-      if (shouldReconnect.current) {
-        reconnectTimer.current = setTimeout(() => {
-          connect()
-        }, 2000)
-      }
+      // Do NOT reconnect — interview + debate is a one-shot flow
     }
 
     ws.onerror = () => {
