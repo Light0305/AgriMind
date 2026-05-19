@@ -87,29 +87,26 @@ set AGRIMIND_API_KEY=sk-your-key-here       # Windows
 
 > 原始仓库：[Hugging Face](https://huggingface.co/LightChuan/AgriMind)
 
-### 1. 代码包（~1.3MB）
+### 1. 代码包（~1MB）
 
 包含完整源代码、前端、测试图片（50 张）和文档。使用 API 模式即可运行，无需下载模型。
 
 - **GitHub**: https://github.com/Light0305/AgriMind
-- **下载**: https://hf-mirror.com/LightChuan/AgriMind/resolve/main/AgriMind-code.tar.gz
+- **下载**: https://hf-mirror.com/LightChuan/AgriMind/resolve/main/AgriMind-code.zip
 
-### 2. 完整包（~13GB）
+### 2. 完整包（~16GB）
 
 在代码包基础上，附带微调后的 AgriMind-v2 模型权重（Qwen2.5-VL-7B + QLoRA，8.29B 参数），支持本地 GPU 推理。
 
-- **下载**: https://hf-mirror.com/LightChuan/AgriMind/resolve/main/AgriMind-full.tar.gz
+- **下载**: https://hf-mirror.com/LightChuan/AgriMind/resolve/main/AgriMind-full.zip
 
-下载后直接解压即可，模型文件位于 `models/agrimind-v2/` 目录下：
-```bash
-tar -xzf AgriMind-full.tar.gz
-```
+下载后直接解压即可，模型文件位于 `models/agrimind-v2/` 目录下。
 
-### 3. 附加数据包（~831MB，可选）
+### 3. 附加数据包（~863MB，可选）
 
 包含 PlantVillage 原始图片（56K 张）、训练数据（6302 条 SFT）和 AgriReason 评测数据。仅用于复现实验或重新训练，**不影响系统正常使用**。
 
-- **下载**: https://hf-mirror.com/LightChuan/AgriMind/resolve/main/AgriMind-data.tar.gz
+- **下载**: https://hf-mirror.com/LightChuan/AgriMind/resolve/main/AgriMind-data.zip
 
 ---
 
