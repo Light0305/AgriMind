@@ -37,14 +37,17 @@ async def diagnose_ws(websocket: WebSocket, session_id: str):
             await websocket.close(code=4004)
             return
 
-        # ── Read API config (frontend always sends this first) ──────
-        api_key = ""
-        try:
-            first_msg = await websocket.receive_json()
-            if isinstance(first_msg, dict) and first_msg.get("type") == "config":
-                api_key = str(first_msg.get("api_key", "")).strip()
-        except WebSocketDisconnect:
-            return
+        # ── Check for API key in query params ───────────────────────
+        api_key = websocket.query_params.get("api_key", "")
+
+        # Also try reading config from first message (with short timeout)
+        if not api_key:
+            try:
+                first_msg = await asyncio.wait_for(websocket.receive_json(), timeout=0.3)
+                if isinstance(first_msg, dict) and first_msg.get("type") == "config":
+                    api_key = str(first_msg.get("api_key", "")).strip()
+            except (asyncio.TimeoutError, WebSocketDisconnect, Exception):
+                pass  # No config sent, use local mode
 
         # ── Select VLM backend ──────────────────────────────────────
         if api_key:
@@ -68,13 +71,15 @@ async def diagnose_ws(websocket: WebSocket, session_id: str):
             collected_context.append(diag_ctx.user_context)
 
         questions = [
-            ("请问作物种植在哪个地区？（例如：陕西杨凌）"),
-            ("目前是什么季节/月份？"),
-            ("近期天气情况如何？（例如：近期多雨、高温干旱等）"),
-            ("请描述您观察到的具体症状。"),
+            "请问作物种植在哪个地区？（例如：陕西杨凌）",
+            "目前是什么季节/月份？",
+            "近期天气情况如何？（例如：近期多雨、高温干旱等）",
+            "请描述您观察到的具体症状。",
         ]
 
         for idx, question in enumerate(questions):
+            if websocket.client_state != WebSocketState.CONNECTED:
+                return
             await websocket.send_json({
                 "type": "avd_question",
                 "data": {
@@ -103,10 +108,13 @@ async def diagnose_ws(websocket: WebSocket, session_id: str):
         diag_ctx.user_context = "；".join(collected_context)
 
         # ── Phase 2: AVD image assessment ───────────────────────────
+        if websocket.client_state != WebSocketState.CONNECTED:
+            return
+
         await websocket.send_json({
             "type": "avd_sufficient",
             "data": {
-                "summary": "问诊完成，正在分析图片信息充分度...",
+                "summary": "问诊完成，正在分析图片...",
                 "confidence": 0.0,
                 "forced": False,
             },
@@ -141,6 +149,9 @@ async def diagnose_ws(websocket: WebSocket, session_id: str):
                 break
 
         # ── Phase 3: DDP Debate ─────────────────────────────────────
+        if websocket.client_state != WebSocketState.CONNECTED:
+            return
+
         knowledge_retriever = None
         case_retriever = None
         try:
@@ -187,7 +198,6 @@ async def diagnose_ws(websocket: WebSocket, session_id: str):
         queue.put_nowait(_DONE)
         await sender_task
 
-        # ── Send result ─────────────────────────────────────────────
         session["result"] = result
         session["status"] = "completed"
 

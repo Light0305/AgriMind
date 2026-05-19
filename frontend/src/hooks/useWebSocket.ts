@@ -59,8 +59,6 @@ export function useWebSocket(sessionId: string | null, apiKey?: string): UseWebS
     ws.onopen = () => {
       setIsConnected(true)
       setError(null)
-      // Always send config as first message
-      ws.send(JSON.stringify({ type: 'config', api_key: apiKeyRef.current || '' }))
     }
 
     ws.onmessage = (event) => {
