@@ -18,14 +18,13 @@ function nextId(): string {
 
 interface UseDiagnosisReturn {
   session: DiagnosisSession | null
-  /** Upload initial image(s) to create a diagnosis session */
+  apiKey: string
+  setApiKey: (key: string) => void
   uploadImage: (file: File, context?: string) => Promise<void>
-  /** Upload an additional image during AVD questioning */
   addChatImage: (file: File) => Promise<void>
-  /** Send a text chat message (unused for now but keeps the chat panel wired) */
   sendChatMessage: (text: string) => void
-  /** Skip AVD and jump directly to DDP debate */
   skipToDebate: () => void
+  resetSession: () => void
 }
 
 /* ── Hook ───────────────────────────────────────────────── */
@@ -277,5 +276,9 @@ export function useDiagnosis(): UseDiagnosisReturn {
     )
   }, [ws])
 
-  return { session, apiKey, setApiKey, uploadImage, addChatImage, sendChatMessage, skipToDebate }
+  const resetSession = useCallback(() => {
+    setSession(null)
+  }, [])
+
+  return { session, apiKey, setApiKey, uploadImage, addChatImage, sendChatMessage, skipToDebate, resetSession }
 }

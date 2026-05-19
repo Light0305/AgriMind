@@ -36,6 +36,7 @@ export default function DiagnosisPage() {
     addChatImage,
     sendChatMessage,
     skipToDebate,
+    resetSession,
   } = useDiagnosis()
 
   const [activeTab, setActiveTab] = useState<'chat' | 'debate'>('chat')
@@ -101,7 +102,7 @@ export default function DiagnosisPage() {
             <ImageUpload
               onUpload={uploadImage}
               images={images}
-              disabled={status === 'debating' || status === 'uploading'}
+              disabled={status === 'debating' || status === 'uploading' || status === 'complete'}
             />
           </div>
 
@@ -260,6 +261,16 @@ export default function DiagnosisPage() {
                   currentImage={images[0]}
                 />
               )}
+
+            {/* New diagnosis button */}
+            <div className="flex justify-center pt-4">
+              <button
+                onClick={resetSession}
+                className="px-8 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-base transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
+              >
+                {'\u{1F504}'} 开始新的诊断
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
