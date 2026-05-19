@@ -57,11 +57,13 @@ export function useWebSocket(sessionId: string | null, apiKey?: string): UseWebS
     wsRef.current = ws
 
     ws.onopen = () => {
+      console.log('WS OPEN', sessionId)
       setIsConnected(true)
       setError(null)
     }
 
     ws.onmessage = (event) => {
+      console.log('WS MSG:', event.data.substring(0, 100))
       try {
         const msg: WSMessage = JSON.parse(event.data)
 
@@ -131,7 +133,8 @@ export function useWebSocket(sessionId: string | null, apiKey?: string): UseWebS
       }
     }
 
-    ws.onclose = () => {
+    ws.onclose = (e) => {
+      console.log('WS CLOSED', sessionId, 'code:', e.code, 'reason:', e.reason)
       setIsConnected(false)
       wsRef.current = null
     }
@@ -149,8 +152,11 @@ export function useWebSocket(sessionId: string | null, apiKey?: string): UseWebS
   }, [sessionId])  // ONLY depend on sessionId, nothing else
 
   const sendMessage = useCallback((data: unknown) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(data))
+    const ws = wsRef.current
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(data))
+    } else {
+      console.error('WebSocket not open! readyState:', ws?.readyState, 'data:', data)
     }
   }, [])
 

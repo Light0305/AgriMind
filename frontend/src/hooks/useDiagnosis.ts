@@ -54,13 +54,19 @@ export function useDiagnosis(): UseDiagnosisReturn {
     }
   }, [ws.agentMessages, session])
 
+  // Merge WS chat messages (system) with user messages in session
   useEffect(() => {
     if (!session) return
     if (ws.chatMessages.length > prevChatLen.current) {
       prevChatLen.current = ws.chatMessages.length
-      setSession((prev) =>
-        prev ? { ...prev, chatMessages: [...(prev.chatMessages ?? []), ...ws.chatMessages.slice(prev.chatMessages.length)] } : prev,
-      )
+      // Merge: keep user messages from session + all system messages from WS
+      setSession((prev) => {
+        if (!prev) return prev
+        const userMsgs = (prev.chatMessages ?? []).filter(m => m.role === 'user')
+        // Interleave: rebuild from WS system messages + user messages by timestamp
+        const allMsgs = [...ws.chatMessages, ...userMsgs].sort((a, b) => a.timestamp - b.timestamp)
+        return { ...prev, chatMessages: allMsgs }
+      })
     }
   }, [ws.chatMessages, session])
 

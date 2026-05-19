@@ -40,15 +40,6 @@ async def diagnose_ws(websocket: WebSocket, session_id: str):
         # ── Check for API key in query params ───────────────────────
         api_key = websocket.query_params.get("api_key", "")
 
-        # Also try reading config from first message (with short timeout)
-        if not api_key:
-            try:
-                first_msg = await asyncio.wait_for(websocket.receive_json(), timeout=0.3)
-                if isinstance(first_msg, dict) and first_msg.get("type") == "config":
-                    api_key = str(first_msg.get("api_key", "")).strip()
-            except (asyncio.TimeoutError, WebSocketDisconnect, Exception):
-                pass  # No config sent, use local mode
-
         # ── Select VLM backend ──────────────────────────────────────
         if api_key:
             from app.config import Settings
