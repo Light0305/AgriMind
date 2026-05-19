@@ -1,97 +1,143 @@
 @echo off
-chcp 65001 >nul 2>&1
 REM ============================================================
-REM   AgriMind 一键安装脚本 (Windows)
-REM   双击运行或命令行执行: setup.bat
+REM   AgriMind - One-Click Setup (Windows)
+REM   Double-click to run, or: setup.bat
 REM ============================================================
 
 echo ============================================
-echo    AgriMind - 作物智能会诊系统 一键安装
+echo    AgriMind - Crop Diagnosis System
+echo    One-Click Setup for Windows
 echo ============================================
+echo.
 
-REM ── 1. 检测 Python ──────────────────────────
-echo [1/5] 检测 Python...
+REM == Step 1: Python ==
+echo [1/5] Checking Python...
 where python >nul 2>&1
-if %errorlevel% neq 0 (
-    echo [错误] 未找到 Python，请先安装 Python 3.10+
-    echo 下载地址: https://www.python.org/downloads/
-    pause
-    exit /b 1
-)
+if %errorlevel% neq 0 goto :need_python
 python --version
+goto :step2
 
-REM ── 2. 创建虚拟环境 ────────────────────────
+:need_python
+echo   Python not found!
+where winget >nul 2>&1
+if %errorlevel% neq 0 goto :python_fail
+echo   Installing Python 3.12 via winget...
+winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements
+if %errorlevel% neq 0 goto :python_fail
+echo.
+echo   Python installed! Please CLOSE this window and run setup.bat again.
+pause
+exit /b 0
+
+:python_fail
+echo   [ERROR] Please install Python 3.10+ manually:
+echo           https://www.python.org/downloads/
+echo   IMPORTANT: Check "Add Python to PATH" during installation!
+echo   Then re-run setup.bat.
+pause
+exit /b 1
+
+REM == Step 2: Node.js ==
+:step2
+echo [2/5] Checking Node.js...
+where node >nul 2>&1
+if %errorlevel% neq 0 goto :need_node
+node --version
+goto :step3
+
+:need_node
+echo   Node.js not found!
+where winget >nul 2>&1
+if %errorlevel% neq 0 goto :node_skip
+echo   Installing Node.js LTS via winget...
+winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements
+if %errorlevel% neq 0 goto :node_skip
+echo   Node.js installed! Will be available after restarting this script.
+goto :step3
+
+:node_skip
+echo   [INFO] Node.js 18+ not found. Frontend will not be installed.
+echo   Download: https://nodejs.org/
+echo   You can re-run setup.bat after installing Node.js.
+
+REM == Step 3: Virtual environment ==
+:step3
+echo.
+echo [3/5] Setting up Python virtual environment...
 if not exist "venv" (
-    echo [2/5] 创建虚拟环境...
     python -m venv venv
+    echo   Virtual environment created.
 ) else (
-    echo [2/5] 虚拟环境已存在
+    echo   Virtual environment already exists.
 )
 call venv\Scripts\activate.bat
 
-REM ── 3. 安装后端依赖 ────────────────────────
-echo [3/5] 安装 Python 依赖...
-pip install -q --upgrade pip
+REM == Step 4: Backend dependencies ==
+echo [4/5] Installing Python dependencies (this may take a few minutes)...
+python -m pip install --quiet --upgrade pip
 
-echo   安装 PyTorch...
-pip install -q torch torchvision 2>nul
+echo   Installing PyTorch...
+python -m pip install --quiet torch torchvision 2>nul
 if %errorlevel% neq 0 (
-    echo   PyTorch CUDA 安装失败，尝试 CPU 版...
-    pip install -q torch torchvision --index-url https://download.pytorch.org/whl/cpu
+    echo   GPU version failed, installing CPU version...
+    python -m pip install --quiet torch torchvision --index-url https://download.pytorch.org/whl/cpu
 )
 
-echo   安装后端依赖...
-pip install -q -r backend\requirements.txt
+echo   Installing backend packages...
+python -m pip install --quiet -r backend\requirements.txt
+echo   Backend dependencies installed.
 
-REM ── 4. 安装前端依赖 ────────────────────────
-echo [4/5] 安装前端依赖...
+REM == Step 5: Frontend ==
+echo [5/5] Installing frontend dependencies...
 where node >nul 2>&1
-if %errorlevel% neq 0 (
-    echo   [提示] 未检测到 Node.js，跳过前端安装
-    echo   如需 Web 界面，请安装 Node.js 18+: https://nodejs.org/
-) else (
-    pushd frontend
-    call npm install --silent 2>nul
-    popd
-    echo   前端依赖安装完成
-)
+if %errorlevel% neq 0 goto :no_frontend
+pushd frontend
+call npm install --silent 2>nul
+popd
+echo   Frontend dependencies installed.
+goto :post_install
 
-REM ── 5. 初始化知识库 ────────────────────────
-echo [5/5] 初始化 RAG 知识库...
+:no_frontend
+echo   Skipped - Node.js not available.
+
+REM == Post-install ==
+:post_install
+echo.
+echo Initializing knowledge base...
 pushd backend
 set PYTHONPATH=.
-python -c "from app.rag.indexer import *; print('  知识库就绪')" 2>nul
-if %errorlevel% neq 0 echo   知识库初始化跳过（首次使用时自动创建）
+python -c "from app.rag.indexer import *; print('  Ready')" 2>nul
+if %errorlevel% neq 0 echo   Skipped (auto-creates on first use).
 popd
 
-REM ── 检查模型 ────────────────────────────────
 if exist "models\agrimind-v2\" (
-    echo   模型已存在，支持 GPU 模式和 API 模式
+    echo   Local model found (GPU + API modes available).
 ) else (
     echo.
-    echo   [提示] 未检测到本地模型
-    echo   系统将使用 API 模式运行（需要 DashScope API Key）
-    echo   如需本地 GPU 推理，请下载完整包并解压模型到 models\agrimind-v2\
+    echo   [INFO] No local model detected.
+    echo   Will use API mode - requires DashScope API Key.
+    echo   For GPU mode, download the full package with model weights.
 )
 
-REM ── 完成 ────────────────────────────────────
 echo.
 echo ============================================
-echo    安装完成！
+echo    Setup Complete!
 echo ============================================
 echo.
-echo 使用方式:
+echo Quick Start:
 echo.
-echo   1. 启动后端:
+echo   1. Start backend:
 echo      venv\Scripts\activate
-echo      cd backend ^&^& uvicorn app.main:app --host 0.0.0.0 --port 8000
+echo      cd backend
+echo      uvicorn app.main:app --host 0.0.0.0 --port 8000
 echo.
-echo   2. 启动前端 (新开终端):
-echo      cd frontend ^&^& npm run dev
+echo   2. Start frontend (new terminal):
+echo      cd frontend
+echo      npm run dev
 echo.
-echo   3. 打开浏览器访问: http://localhost:5173
+echo   3. Open http://localhost:5173 in your browser
 echo.
-echo   API 模式: set AGRIMIND_API_KEY=sk-xxx 或在界面勾选
-echo   GPU 模式: 确保 models\agrimind-v2\ 存在
+echo   API mode: set AGRIMIND_API_KEY=sk-xxx (or enable in web UI)
+echo   GPU mode: ensure models\agrimind-v2\ exists
 echo.
 pause

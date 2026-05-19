@@ -44,10 +44,11 @@ setup.bat
 ```
 
 安装脚本会自动：
-1. 创建 Python 虚拟环境
-2. 检测 GPU 并安装对应版本的 PyTorch
-3. 安装所有后端和前端依赖
-4. 初始化 RAG 知识库
+1. 检测 Python / Node.js，未安装则通过 winget 自动安装（Windows）
+2. 创建 Python 虚拟环境
+3. 检测 GPU 并安装对应版本的 PyTorch
+4. 安装所有后端和前端依赖
+5. 初始化 RAG 知识库
 
 ### 启动服务
 
