@@ -61,7 +61,7 @@ async def diagnose_ws(websocket: WebSocket, session_id: str):
 
         # ── Read optional API config from first message ─────────────
         try:
-            first_msg = await asyncio.wait_for(websocket.receive_json(), timeout=2)
+            first_msg = await asyncio.wait_for(websocket.receive_json(), timeout=0.5)
         except asyncio.TimeoutError:
             first_msg = {}
         except WebSocketDisconnect:
@@ -130,36 +130,7 @@ async def diagnose_ws(websocket: WebSocket, session_id: str):
 
         diag_ctx.user_context = "；".join(collected_context)
 
-        # ── Phase 2: AVD image assessment (original) ────────────────
-        avd_session = _build_avd_session(session_id, diag_ctx)
-        avd_sessions[session_id] = avd_session
-        avd_engine = AVDEngine(vlm)
-
-        assessment = await avd_engine.assess(avd_session)
-        await _send_avd_assessment(websocket, assessment)
-
-        while assessment.status == AVDStatus.QUESTIONING:
-            try:
-                msg = await websocket.receive_json()
-            except WebSocketDisconnect:
-                return
-
-            action = msg.get("action") if isinstance(msg, dict) else None
-            if action == "continue":
-                _sync_avd_session(avd_session, diag_ctx)
-                assessment = await avd_engine.assess(avd_session)
-                await _send_avd_assessment(websocket, assessment)
-            elif action == "skip":
-                assessment = AVDAssessment(
-                    status=AVDStatus.FORCED,
-                    confidence=assessment.confidence,
-                    question=None,
-                    summary="用户跳过补充拍照，直接进入诊断。",
-                )
-                await _send_avd_assessment(websocket, assessment)
-                break
-
-        # ── Phase 3: DDP debate (v2 with retrievers) ────────────────
+        # ── Phase 2: DDP debate (skip AVD — interview already done) ──
         # Lazy-init retrievers so the debate benefits from RAG & case memory
         try:
             from app.rag.retriever import KnowledgeRetriever
