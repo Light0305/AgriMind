@@ -59,16 +59,23 @@ cd backend
 PYTHONPATH=. python app/rag/indexer.py 2>/dev/null || echo "  知识库已存在，跳过"
 cd ..
 
-# ── 5. 检查模型 ────────────────────────────────────────
+# ── 5. 检查模型（可选，仅本地 GPU 模式需要） ──────────
 echo -e "${GREEN}[5/5] 检查模型文件...${NC}"
-MODEL_DIR="models/qwen2.5-vl-7b"
-if [ ! -d "$MODEL_DIR" ]; then
-  echo "  模型未下载。"
-  echo "  请将 Qwen2.5-VL-7B-Instruct 放到 $MODEL_DIR"
-  echo "  或使用 API 模式：设置环境变量 AGRIMIND_API_KEY"
+MODEL_DIR="models/agrimind-v2"
+BASE_MODEL_DIR="models/qwen2.5-vl-7b"
+
+if [ -d "$MODEL_DIR" ] || [ -d "$BASE_MODEL_DIR" ]; then
+  echo "  模型已存在，可切换本地 GPU 模式。"
+else
+  echo "  ℹ️  未检测到本地模型（16GB）。"
+  echo "  系统默认使用 API 模式，无需模型即可运行。"
   echo ""
-  echo "  下载命令："
-  echo "  huggingface-cli download Qwen/Qwen2.5-VL-7B-Instruct --local-dir $MODEL_DIR"
+  echo "  如需本地 GPU 模式，下载完整包："
+  echo "    Hugging Face: https://huggingface.co/<your-org>/agrimind-v2"
+  echo "    百度网盘: [链接]"
+  echo ""
+  echo "  或下载基础模型："
+  echo "    huggingface-cli download Qwen/Qwen2.5-VL-7B-Instruct --local-dir $BASE_MODEL_DIR"
 fi
 
 # ── 完成 ────────────────────────────────────────────────
