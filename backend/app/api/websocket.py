@@ -89,13 +89,12 @@ async def diagnose_ws(websocket: WebSocket, session_id: str):
                 return
             logger.info("Using local model")
 
-        # ── Structured Interview (replaces photo-based AVD) ────────
+        # ── Phase 1: Structured Interview ──────────────────────────
         diag_ctx = session["context"]
         collected_context: list[str] = []
         if diag_ctx.user_context:
             collected_context.append(diag_ctx.user_context)
 
-        # Structured questions: location → time → weather → symptoms
         questions = [
             ("location", "请问作物种植在哪个地区？（例如：陕西杨凌）"),
             ("season", "目前是什么季节/月份？"),
@@ -125,14 +124,42 @@ async def diagnose_ws(websocket: WebSocket, session_id: str):
             if action == "continue":
                 answer = str(msg.get("answer", "")).strip()
                 if answer:
-                    collected_context.append(f"{qid}: {answer}")
+                    collected_context.append(answer)
             elif action == "skip":
-                continue  # skip this question, proceed to next
+                continue
 
-        # Build enriched context from interview answers
         diag_ctx.user_context = "；".join(collected_context)
 
-        # ── AVD done — proceed to DDP debate (v2 with retrievers) ────
+        # ── Phase 2: AVD image assessment (original) ────────────────
+        avd_session = _build_avd_session(session_id, diag_ctx)
+        avd_sessions[session_id] = avd_session
+        avd_engine = AVDEngine(vlm)
+
+        assessment = await avd_engine.assess(avd_session)
+        await _send_avd_assessment(websocket, assessment)
+
+        while assessment.status == AVDStatus.QUESTIONING:
+            try:
+                msg = await websocket.receive_json()
+            except WebSocketDisconnect:
+                return
+
+            action = msg.get("action") if isinstance(msg, dict) else None
+            if action == "continue":
+                _sync_avd_session(avd_session, diag_ctx)
+                assessment = await avd_engine.assess(avd_session)
+                await _send_avd_assessment(websocket, assessment)
+            elif action == "skip":
+                assessment = AVDAssessment(
+                    status=AVDStatus.FORCED,
+                    confidence=assessment.confidence,
+                    question=None,
+                    summary="用户跳过补充拍照，直接进入诊断。",
+                )
+                await _send_avd_assessment(websocket, assessment)
+                break
+
+        # ── Phase 3: DDP debate (v2 with retrievers) ────────────────
         # Lazy-init retrievers so the debate benefits from RAG & case memory
         try:
             from app.rag.retriever import KnowledgeRetriever
