@@ -91,15 +91,26 @@ set AGRIMIND_API_KEY=sk-your-key-here       # Windows
 - **GitHub**: https://github.com/Light0305/AgriMind
 - **百度网盘**: [链接]
 
-### 2. 完整包（~16GB）
+### 2. 完整包（~13GB）
 
 在代码包基础上，附带微调后的 AgriMind-v2 模型权重（Qwen2.5-VL-7B + QLoRA，8.29B 参数），支持本地 GPU 推理。
 
 - **百度网盘**: [链接]
 
-下载后解压，模型文件应位于 `models/agrimind-v2/` 目录下。
+> 由于文件较大，完整包拆分为 4 个分卷上传。下载全部分卷后，合并解压：
+> ```bash
+> # Linux/macOS
+> cat AgriMind-full.tar.gz.part_* > AgriMind-full.tar.gz
+> tar -xzf AgriMind-full.tar.gz
+>
+> # Windows (PowerShell)
+> cmd /c copy /b AgriMind-full.tar.gz.part_aa+AgriMind-full.tar.gz.part_ab+AgriMind-full.tar.gz.part_ac+AgriMind-full.tar.gz.part_ad AgriMind-full.tar.gz
+> tar -xzf AgriMind-full.tar.gz
+> ```
 
-### 3. 附加数据包（~4GB，可选）
+模型文件应位于 `models/agrimind-v2/` 目录下。
+
+### 3. 附加数据包（~312MB，可选）
 
 包含 PlantVillage 原始图片（56K 张）、训练数据（6302 条 SFT）和 AgriReason 评测数据。仅用于复现实验或重新训练，**不影响系统正常使用**。
 
