@@ -32,13 +32,12 @@ interface UseDiagnosisReturn {
 
 export function useDiagnosis(): UseDiagnosisReturn {
   const [session, setSession] = useState<DiagnosisSession | null>(null)
+  const [apiKey, setApiKey] = useState<string>('')
 
   // --- Determine when to connect the WebSocket ---
-  // Connect as soon as we have a session id (right after POST /api/diagnose).
-  // The backend starts AVD immediately upon WS connection.
   const wsSessionId = session?.id || null
 
-  const ws = useWebSocket(wsSessionId)
+  const ws = useWebSocket(wsSessionId, apiKey || undefined)
 
   // --- Sync WS state into session via effects (not during render) ---
 
@@ -270,5 +269,5 @@ export function useDiagnosis(): UseDiagnosisReturn {
     )
   }, [ws])
 
-  return { session, uploadImage, addChatImage, sendChatMessage, skipToDebate }
+  return { session, apiKey, setApiKey, uploadImage, addChatImage, sendChatMessage, skipToDebate }
 }

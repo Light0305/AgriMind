@@ -30,6 +30,8 @@ const statusLabels: Record<string, { text: string; dot: string }> = {
 export default function DiagnosisPage() {
   const {
     session,
+    apiKey,
+    setApiKey,
     uploadImage,
     addChatImage,
     sendChatMessage,
@@ -56,6 +58,37 @@ export default function DiagnosisPage() {
 
   return (
     <div className="flex-1 flex flex-col gap-6 p-6">
+      {/* -- API mode toggle ---------------------------------------- */}
+      <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 rounded-lg text-sm">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!!apiKey}
+            onChange={(e) => {
+              if (e.target.checked) {
+                setApiKey('sk-1aa3647be3dc4122ba4a9487aab9d7da')
+              } else {
+                setApiKey('')
+              }
+            }}
+            className="w-4 h-4 rounded accent-emerald-600"
+          />
+          <span className="font-medium">API 模式 (无需本地 GPU)</span>
+        </label>
+        {apiKey && (
+          <input
+            type="text"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder="输入 DashScope API Key"
+            className="flex-1 px-2 py-1 border rounded text-xs font-mono"
+          />
+        )}
+        {!apiKey && (
+          <span className="text-gray-400 text-xs">使用本地 Qwen2.5-VL-7B 模型</span>
+        )}
+      </div>
+
       {/* -- Top: two-column layout ----------------------------------- */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
         {/* --- Left column: images ----------------------------------- */}

@@ -26,7 +26,7 @@ function nextChatId(): string {
 
 /* ── Hook ───────────────────────────────────────────────── */
 
-export function useWebSocket(sessionId: string | null): UseWebSocketReturn {
+export function useWebSocket(sessionId: string | null, apiKey?: string): UseWebSocketReturn {
   const [agentMessages, setAgentMessages] = useState<AgentMessage[]>([])
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [result, setResult] = useState<DebateResult | null>(null)
@@ -56,6 +56,10 @@ export function useWebSocket(sessionId: string | null): UseWebSocketReturn {
       if (reconnectTimer.current) {
         clearTimeout(reconnectTimer.current)
         reconnectTimer.current = null
+      }
+      // Send API config if using API mode
+      if (apiKey) {
+        ws.send(JSON.stringify({ type: 'config', api_key: apiKey }))
       }
     }
 

@@ -59,14 +59,35 @@ async def diagnose_ws(websocket: WebSocket, session_id: str):
             await websocket.close(code=4004)
             return
 
-        # ── Ensure model is loaded (lazy init via app.state) ────────
-        vlm = websocket.app.state.vlm  # type: ignore[attr-defined]
-        if vlm is None:
-            await websocket.send_json(
-                {"type": "error", "data": {"message": "Model not loaded yet"}}
-            )
-            await websocket.close(code=4503)
+        # ── Read optional API config from first message ─────────────
+        try:
+            first_msg = await asyncio.wait_for(websocket.receive_json(), timeout=2)
+        except asyncio.TimeoutError:
+            first_msg = {}
+        except WebSocketDisconnect:
             return
+
+        api_key = ""
+        if isinstance(first_msg, dict) and first_msg.get("type") == "config":
+            api_key = str(first_msg.get("api_key", "")).strip()
+
+        # ── Use API or local VLM ────────────────────────────────────
+        if api_key:
+            from app.config import Settings
+            from app.model.inference import VLMInference
+
+            cfg = Settings(api_key=api_key)
+            vlm = VLMInference.from_config(cfg)
+            logger.info("Using API mode (key=***%s)", api_key[-4:])
+        else:
+            vlm = websocket.app.state.vlm  # type: ignore[attr-defined]
+            if vlm is None:
+                await websocket.send_json(
+                    {"type": "error", "data": {"message": "Model not loaded yet"}}
+                )
+                await websocket.close(code=4503)
+                return
+            logger.info("Using local model")
 
         # ── Build AVD session from DiagnosisContext ──────────────────
         diag_ctx = session["context"]
