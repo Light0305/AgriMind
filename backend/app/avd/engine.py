@@ -30,28 +30,28 @@ class AVDEngine:
     ASSESSMENT_SYSTEM_PROMPT = """\
 你是一位经验丰富的植物病理学家，正在进行远程问诊。
 用户已通过文字描述了种植地区、季节、天气和观察到的症状。
-请评估当前收到的图片是否足以做出可靠诊断。
+你需要判断：当前的图片是否足以做出可靠诊断？
 
-输出JSON（不要markdown代码块）：
-{
-    "sufficient": true,
-    "confidence": 0.85,
-    "current_assessment": "叶片正面症状清晰，可见典型褐色同心轮纹，足以判断为番茄早疫病"
-}
-
-如果图片模糊或信息不足，将sufficient设为false：
+你必须输出一个JSON对象（不要markdown代码块），格式如下：
 {
     "sufficient": false,
-    "confidence": 0.5,
-    "current_assessment": "图片不够清晰，无法看清关键症状特征",
+    "confidence": 0.0到1.0之间的数字,
+    "current_assessment": "你对当前图片的分析（描述你看到了什么）",
     "if_insufficient": {
-        "question": "是否有更清晰或不同角度的图片？可以补充上传",
-        "reason": "当前图片细节不够，补充图片有助于准确诊断",
-        "target_part": "其他角度"
+        "question": "你需要用户补充什么（具体描述，不要套用模板）",
+        "reason": "为什么需要这个信息",
+        "target_part": "需要拍摄的具体部位"
     }
 }
 
-注意：if_insufficient里的question统一询问"是否有补充图片"，不要猜测具体需要哪个部位。"""
+当sufficient为true时，可以省略if_insufficient字段。
+
+判断标准：
+- 只有1张图片时，通常信息不够充分，confidence不应超过0.6
+- 图片模糊、角度单一、无法看清病斑形态/颜色/分布时 → 信息不足
+- 能清晰看到病斑特征（形状、颜色、大小、分布）且有多角度照片 → 信息充分
+- 追问要具体：比如"请拍摄叶片背面的病斑特写"而不是"请提供更多照片"
+- 不要总是建议拍植株整体——要根据当前缺失的信息来决定拍什么"""
 
     def __init__(self, vlm: VLMInference) -> None:
         self.vlm = vlm
@@ -69,9 +69,10 @@ class AVDEngine:
            with whatever we have).
         2. Call VLM to assess sufficiency.
         3. Parse the JSON response.
-        4. If the VLM says *sufficient* **or** confidence ≥ threshold →
+        4. Apply heuristic: with only 1 image, raise threshold to 0.90.
+        5. If the VLM says *sufficient* **and** confidence ≥ threshold →
            **SUFFICIENT**.
-        5. Otherwise → **QUESTIONING** with a follow-up question.
+        6. Otherwise → **QUESTIONING** with a follow-up question.
         """
         # Gate: max rounds reached — force DDP to proceed.
         if not session.can_ask_more:
@@ -113,9 +114,15 @@ class AVDEngine:
             images=list(session.images),
         )
 
+        # Heuristic: with only 1 image, require much higher confidence.
+        effective_threshold = session.sufficiency_threshold
+        if len(session.images) <= 1:
+            effective_threshold = max(effective_threshold, 0.90)
+
         assessment = self._parse_assessment(
             raw_response,
-            threshold=session.sufficiency_threshold,
+            threshold=effective_threshold,
+            num_images=len(session.images),
         )
 
         # Track the question we just asked so we don't repeat it.
@@ -163,6 +170,7 @@ class AVDEngine:
         response: str,
         *,
         threshold: float = 0.75,
+        num_images: int = 1,
     ) -> AVDAssessment:
         """Parse VLM JSON response into an :class:`AVDAssessment`."""
         # Strip markdown code fences
@@ -178,7 +186,7 @@ class AVDEngine:
                 status=AVDStatus.QUESTIONING,
                 confidence=0.3,
                 question=AVDQuestion(
-                    question="是否有补充图片？可以上传其他角度的照片",
+                    question="请换个角度再拍一张，当前图片信息不够清晰",
                     reason="无法解析评估结果",
                     target_part="其他角度",
                 ),
@@ -193,9 +201,9 @@ class AVDEngine:
                 status=AVDStatus.QUESTIONING,
                 confidence=0.3,
                 question=AVDQuestion(
-                    question="是否有补充图片？可以上传其他角度的照片",
+                    question="请补充拍摄病害部位的细节特写",
                     reason="评估结果格式异常，需要补充信息",
-                    target_part="其他角度",
+                    target_part="病斑特写",
                 ),
                 summary=response[:200] if response else "无法解析评估结果",
             )
@@ -205,8 +213,13 @@ class AVDEngine:
         confidence = float(data.get("confidence", 0.3))
         summary = str(data.get("current_assessment", ""))
 
-        # Decide status.
-        if sufficient or confidence >= threshold:
+        # Clamp confidence: with only 1 image, cap at 0.7 to prevent
+        # the model from blindly outputting high confidence.
+        if num_images <= 1:
+            confidence = min(confidence, 0.7)
+
+        # Decide status: require BOTH sufficient=true AND confidence ≥ threshold.
+        if sufficient and confidence >= threshold:
             return AVDAssessment(
                 status=AVDStatus.SUFFICIENT,
                 confidence=confidence,
@@ -219,10 +232,18 @@ class AVDEngine:
         if not isinstance(q_data, dict):
             q_data = {}
 
+        # If the model said sufficient but confidence is low, or said
+        # insufficient but didn't provide a question, generate a default.
+        default_question = (
+            "请从另一个角度拍摄病害部位的特写照片"
+            if num_images <= 1
+            else "请补充拍摄您认为最严重的病害部位"
+        )
+
         question = AVDQuestion(
-            question=str(q_data.get("question", "请提供更多照片以辅助诊断")),
-            reason=str(q_data.get("reason", "需要更多信息")),
-            target_part=str(q_data.get("target_part", "其他部位")),
+            question=str(q_data.get("question", default_question)),
+            reason=str(q_data.get("reason", "需要更多视角以确认病害特征")),
+            target_part=str(q_data.get("target_part", "病害部位特写")),
         )
 
         return AVDAssessment(

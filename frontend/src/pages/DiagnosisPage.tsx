@@ -67,7 +67,7 @@ export default function DiagnosisPage() {
             checked={!!apiKey}
             onChange={(e) => {
               if (e.target.checked) {
-                setApiKey('sk-1aa3647be3dc4122ba4a9487aab9d7da')
+                setApiKey('请输入API Key')
               } else {
                 setApiKey('')
               }
@@ -79,9 +79,9 @@ export default function DiagnosisPage() {
         {apiKey && (
           <input
             type="text"
-            value={apiKey}
+            value={apiKey === '请输入API Key' ? '' : apiKey}
             onChange={(e) => setApiKey(e.target.value)}
-            placeholder="输入 DashScope API Key"
+            placeholder="输入 DashScope API Key (sk-...)"
             className="flex-1 px-2 py-1 border rounded text-xs font-mono"
           />
         )}
@@ -141,7 +141,7 @@ export default function DiagnosisPage() {
             </div>
           )}
 
-          {/* Skip-to-debate button (visible during interview + AVD questioning) */}
+          {/* Skip-to-debate button (replaces "startDiagnosis") */}
           <AnimatePresence>
             {status === 'questioning' && (
               <motion.button
@@ -149,9 +149,9 @@ export default function DiagnosisPage() {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
                 onClick={skipToDebate}
-                className="w-full py-4 px-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold text-sm transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
+                className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-sm transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
               >
-                {'\u{26A1}'} 跳过问诊，直接进入 AI 辩论诊断
+                {'\u{1F680}'} 跳过问诊，直接 AI 辩论诊断
               </motion.button>
             )}
           </AnimatePresence>

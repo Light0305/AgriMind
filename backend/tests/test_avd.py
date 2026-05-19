@@ -46,11 +46,6 @@ CANNED_VLM_SUFFICIENT = json.dumps({
     "sufficient": True,
     "confidence": 0.9,
     "current_assessment": "叶面白色粉状物明显，初步判断为白粉病。",
-    "if_insufficient": {
-        "question": "请拍叶片背面",
-        "reason": "需要确认背面是否有菌丝",
-        "target_part": "叶片背面",
-    },
 })
 
 CANNED_VLM_INSUFFICIENT = json.dumps({
@@ -190,19 +185,30 @@ class TestAVDSessionConversion:
 
 
 class TestParseAssessment:
-    """Tests for AVDEngine._parse_assessment() parsing logic."""
+    """Tests for AVDEngine._parse_assessment() parsing logic.
+
+    Note: The engine uses AND logic (both sufficient=True AND
+    confidence >= threshold) and caps single-image confidence at 0.7.
+    """
 
     @pytest.fixture()
     def engine(self):
         vlm = MagicMock()
         return AVDEngine(vlm)
 
-    def test_parse_sufficient(self, engine: AVDEngine):
-        result = engine._parse_assessment(CANNED_VLM_SUFFICIENT)
+    def test_parse_sufficient_multi_image(self, engine: AVDEngine):
+        """With num_images=2 (no cap), sufficient=True + high confidence → SUFFICIENT."""
+        result = engine._parse_assessment(CANNED_VLM_SUFFICIENT, num_images=2)
         assert result.status == AVDStatus.SUFFICIENT
         assert result.confidence == pytest.approx(0.9)
         assert result.question is None
         assert "白粉病" in result.summary
+
+    def test_parse_sufficient_single_image_capped(self, engine: AVDEngine):
+        """With num_images=1, confidence is capped to 0.7 → QUESTIONING."""
+        result = engine._parse_assessment(CANNED_VLM_SUFFICIENT, num_images=1)
+        assert result.status == AVDStatus.QUESTIONING
+        assert result.confidence == pytest.approx(0.7)  # capped
 
     def test_parse_insufficient(self, engine: AVDEngine):
         result = engine._parse_assessment(CANNED_VLM_INSUFFICIENT)
@@ -213,29 +219,43 @@ class TestParseAssessment:
         assert result.question.target_part == "病斑特写"
 
     def test_parse_borderline_confidence_at_threshold(self, engine: AVDEngine):
-        """confidence == threshold → SUFFICIENT (>= check)."""
-        result = engine._parse_assessment(CANNED_VLM_BORDERLINE, threshold=0.75)
+        """sufficient=False + confidence==threshold → QUESTIONING (AND logic)."""
+        result = engine._parse_assessment(
+            CANNED_VLM_BORDERLINE, threshold=0.75, num_images=2,
+        )
+        assert result.status == AVDStatus.QUESTIONING  # sufficient=False
+
+    def test_parse_borderline_sufficient_true(self, engine: AVDEngine):
+        """sufficient=True + confidence==threshold → SUFFICIENT."""
+        data = json.dumps({
+            "sufficient": True,
+            "confidence": 0.8,
+            "current_assessment": "置信度刚好在阈值上。",
+        })
+        result = engine._parse_assessment(data, threshold=0.75, num_images=2)
         assert result.status == AVDStatus.SUFFICIENT
 
     def test_parse_borderline_confidence_below_threshold(self, engine: AVDEngine):
         """confidence < threshold → QUESTIONING."""
-        result = engine._parse_assessment(CANNED_VLM_BORDERLINE, threshold=0.76)
+        result = engine._parse_assessment(
+            CANNED_VLM_BORDERLINE, threshold=0.76, num_images=2,
+        )
         assert result.status == AVDStatus.QUESTIONING
 
     def test_parse_malformed_json(self, engine: AVDEngine):
-        """Malformed JSON → defaults to SUFFICIENT."""
+        """Malformed JSON → QUESTIONING (safe fallback)."""
         result = engine._parse_assessment("{this is not valid json!}")
-        assert result.status == AVDStatus.SUFFICIENT
-        assert result.confidence == pytest.approx(0.5)
+        assert result.status == AVDStatus.QUESTIONING
+        assert result.confidence == pytest.approx(0.3)
 
     def test_parse_no_json_at_all(self, engine: AVDEngine):
-        """No JSON in response → defaults to SUFFICIENT."""
+        """No JSON in response → QUESTIONING (safe fallback)."""
         result = engine._parse_assessment("这是纯文本，没有JSON。")
-        assert result.status == AVDStatus.SUFFICIENT
+        assert result.status == AVDStatus.QUESTIONING
 
     def test_parse_empty_response(self, engine: AVDEngine):
         result = engine._parse_assessment("")
-        assert result.status == AVDStatus.SUFFICIENT
+        assert result.status == AVDStatus.QUESTIONING
 
     def test_parse_json_in_markdown_fence(self, engine: AVDEngine):
         """JSON wrapped in markdown code fence."""
@@ -244,9 +264,9 @@ class TestParseAssessment:
         assert result.status == AVDStatus.QUESTIONING
 
     def test_parse_json_with_surrounding_prose(self, engine: AVDEngine):
-        """JSON embedded in explanatory text."""
+        """JSON embedded in explanatory text (multi-image)."""
         with_prose = f"根据分析结果：\n{CANNED_VLM_SUFFICIENT}\n以上是我的评估。"
-        result = engine._parse_assessment(with_prose)
+        result = engine._parse_assessment(with_prose, num_images=2)
         assert result.status == AVDStatus.SUFFICIENT
 
     def test_parse_missing_if_insufficient_block(self, engine: AVDEngine):
@@ -261,15 +281,15 @@ class TestParseAssessment:
         assert result.question is not None
         assert result.question.question  # has a default
 
-    def test_parse_sufficient_override_by_flag(self, engine: AVDEngine):
-        """Even with low confidence, sufficient=True → SUFFICIENT."""
+    def test_parse_sufficient_but_low_confidence(self, engine: AVDEngine):
+        """sufficient=True but confidence < threshold → QUESTIONING (AND logic)."""
         data = json.dumps({
             "sufficient": True,
             "confidence": 0.1,
             "current_assessment": "症状明显",
         })
-        result = engine._parse_assessment(data)
-        assert result.status == AVDStatus.SUFFICIENT
+        result = engine._parse_assessment(data, num_images=2)
+        assert result.status == AVDStatus.QUESTIONING  # 0.1 < 0.75
 
 
 # ===========================================================================
@@ -291,14 +311,26 @@ class TestAVDEngineAssess:
         return AVDEngine(mock_vlm)
 
     @pytest.mark.asyncio
-    async def test_assess_sufficient(self, engine: AVDEngine, mock_vlm):
+    async def test_assess_sufficient_multi_image(self, engine: AVDEngine, mock_vlm):
+        """With 2+ images, VLM saying sufficient → SUFFICIENT."""
         mock_vlm.generate.return_value = CANNED_VLM_SUFFICIENT
         session = AVDSession(session_id="assess-1")
         session.add_image(_make_tiny_image())
+        session.add_image(_make_tiny_image((0, 255, 0)))
 
         result = await engine.assess(session)
         assert result.status == AVDStatus.SUFFICIENT
         assert mock_vlm.generate.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_assess_single_image_always_questions(self, engine: AVDEngine, mock_vlm):
+        """With only 1 image, even if VLM says sufficient → QUESTIONING (heuristic)."""
+        mock_vlm.generate.return_value = CANNED_VLM_SUFFICIENT
+        session = AVDSession(session_id="assess-1b")
+        session.add_image(_make_tiny_image())
+
+        result = await engine.assess(session)
+        assert result.status == AVDStatus.QUESTIONING  # single-image heuristic
 
     @pytest.mark.asyncio
     async def test_assess_questioning(self, engine: AVDEngine, mock_vlm):
@@ -337,6 +369,7 @@ class TestAVDEngineAssess:
         mock_vlm.generate.return_value = CANNED_VLM_SUFFICIENT
         session = AVDSession(session_id="assess-5")
         session.add_image(_make_tiny_image())
+        session.add_image(_make_tiny_image((0, 255, 0)))
 
         await engine.assess(session)
         assert len(session.questions_asked) == 0
@@ -348,6 +381,7 @@ class TestAVDEngineAssess:
         mock_vlm.generate.return_value = CANNED_VLM_SUFFICIENT
         session = AVDSession(session_id="assess-6", user_context="近期持续降雨")
         session.add_image(_make_tiny_image(), "叶片正面")
+        session.add_image(_make_tiny_image(), "叶片背面")
 
         await engine.assess(session)
 
@@ -382,12 +416,13 @@ class TestAVDRunSession:
 
     @pytest.mark.asyncio
     async def test_sufficient_runs_ddp(self, mock_vlm, mock_ddp):
-        """When AVD says sufficient, DDP debate should run."""
+        """When AVD says sufficient (multi-image), DDP debate should run."""
         mock_vlm.generate.return_value = CANNED_VLM_SUFFICIENT
 
         engine = AVDEngine(mock_vlm)
         session = AVDSession(session_id="flow-1")
         session.add_image(_make_tiny_image())
+        session.add_image(_make_tiny_image((0, 255, 0)))
 
         assessments: list[AVDAssessment] = []
         result = await engine.run_session(
@@ -436,6 +471,7 @@ class TestAVDRunSession:
         engine = AVDEngine(mock_vlm)
         session = AVDSession(session_id="flow-4")
         session.add_image(_make_tiny_image())
+        session.add_image(_make_tiny_image((0, 255, 0)))
 
         messages: list[AgentMessage] = []
         await engine.run_session(

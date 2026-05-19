@@ -24,6 +24,9 @@ data/processed/
 *.parquet
 *.arrow
 
+# Runtime data
+backend/data/
+
 # Environment
 .env
 .env.local
@@ -46,6 +49,9 @@ Thumbs.db
 wandb/
 runs/
 
+# Cache
+.pytest_cache/
+
 # Skills (installed separately)
 .agents/
 
@@ -53,6 +59,4 @@ runs/
 .tmp.driveupload/
 tmp/
 *.tmp
-
-# Misc project files
-run_pipeline.sh
+test/

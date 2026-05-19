@@ -1,3 +1,5 @@
+# AgriMind Backend Dependencies
+# Core
 fastapi>=0.111.0
 uvicorn[standard]>=0.30.0
 websockets>=12.0
@@ -5,12 +7,23 @@ python-multipart>=0.0.9
 Pillow>=10.0.0
 pydantic>=2.0.0
 pydantic-settings>=2.0.0
+
+# ML / Inference
 torch>=2.0.0
 transformers>=4.45.0
 peft>=0.12.0
 bitsandbytes>=0.43.0
 accelerate>=0.30.0
+qwen-vl-utils>=0.0.8
+
+# RAG / Retrieval
 chromadb>=0.5.0
+sentence-transformers>=3.0.0
 imagehash>=4.3.0
+
+# API mode
+openai>=1.0.0
+
+# Testing (optional)
 pytest>=8.0.0
 pytest-asyncio>=0.23.0
