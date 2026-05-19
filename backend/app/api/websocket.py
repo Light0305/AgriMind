@@ -108,8 +108,29 @@ async def diagnose_ws(websocket: WebSocket, session_id: str):
             else:
                 logger.warning("Unknown WS action %r, ignoring", action)
 
-        # ── AVD done — proceed to DDP debate ────────────────────────
-        orchestrator = DDPOrchestrator(vlm)
+        # ── AVD done — proceed to DDP debate (v2 with retrievers) ────
+        # Lazy-init retrievers so the debate benefits from RAG & case memory
+        try:
+            from app.rag.retriever import KnowledgeRetriever
+            knowledge_retriever = KnowledgeRetriever()
+            knowledge_retriever.collection  # force lazy init
+        except Exception:
+            logger.warning("KnowledgeRetriever unavailable, proceeding without RAG")
+            knowledge_retriever = None
+
+        try:
+            from app.retrieval.similar_cases import SimilarCaseRetriever
+            case_retriever = SimilarCaseRetriever()
+            case_retriever.collection  # force lazy init
+        except Exception:
+            logger.warning("SimilarCaseRetriever unavailable, proceeding without cases")
+            case_retriever = None
+
+        orchestrator = DDPOrchestrator(
+            vlm,
+            case_retriever=case_retriever,
+            knowledge_retriever=knowledge_retriever,
+        )
 
         queue: asyncio.Queue = asyncio.Queue()
 

@@ -97,7 +97,7 @@ class AVDAssessment(BaseModel):
 # ---------------------------------------------------------------------------
 
 class DebateResult(BaseModel):
-    """Structured output produced by the DDP engine."""
+    """Structured output produced by the DDP engine (v2 enhanced)."""
 
     final_diagnosis: str
     confidence: Confidence
@@ -106,6 +106,8 @@ class DebateResult(BaseModel):
     uncertainty_notes: list[str] = Field(default_factory=list)
     debate_transcript: list[AgentMessage]
     grounding_boxes: list[GroundingBox] = Field(default_factory=list)
+    similar_cases: list[SimilarCase] = Field(default_factory=list)
+    treatment_context: str = ""
 
 
 # ---------------------------------------------------------------------------
