@@ -37,7 +37,7 @@ export function useDiagnosis(): UseDiagnosisReturn {
   // --- Determine when to connect the WebSocket ---
   const wsSessionId = session?.id || null
 
-  const ws = useWebSocket(wsSessionId, apiKey || undefined)
+  const ws = useWebSocket(wsSessionId, apiKey)
 
   // --- Sync WS state into session via effects (not during render) ---
 

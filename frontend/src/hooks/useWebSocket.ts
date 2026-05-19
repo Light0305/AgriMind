@@ -37,8 +37,9 @@ export function useWebSocket(sessionId: string | null, apiKey?: string): UseWebS
 
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  /** Prevent reconnect after a clean close (result received or user navigated away). */
   const shouldReconnect = useRef(true)
+  const apiKeyRef = useRef(apiKey)
+  apiKeyRef.current = apiKey
 
   const connect = useCallback(() => {
     if (!sessionId) return
@@ -58,7 +59,7 @@ export function useWebSocket(sessionId: string | null, apiKey?: string): UseWebS
         reconnectTimer.current = null
       }
       // Always send config message — empty key means local mode
-      ws.send(JSON.stringify({ type: 'config', api_key: apiKey || '' }))
+      ws.send(JSON.stringify({ type: 'config', api_key: apiKeyRef.current || '' }))
     }
 
     ws.onmessage = (event) => {

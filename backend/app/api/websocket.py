@@ -103,6 +103,15 @@ async def diagnose_ws(websocket: WebSocket, session_id: str):
         diag_ctx.user_context = "；".join(collected_context)
 
         # ── Phase 2: AVD image assessment ───────────────────────────
+        await websocket.send_json({
+            "type": "avd_sufficient",
+            "data": {
+                "summary": "问诊完成，正在分析图片信息充分度...",
+                "confidence": 0.0,
+                "forced": False,
+            },
+        })
+
         avd_session = _build_avd_session(session_id, diag_ctx)
         avd_sessions[session_id] = avd_session
         avd_engine = AVDEngine(vlm)
