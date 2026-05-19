@@ -515,7 +515,7 @@ def main():
         save_steps=train_cfg.get("save_steps", 200),
         save_total_limit=train_cfg.get("save_total_limit", 3),
         save_strategy="steps",
-        evaluation_strategy="steps" if val_dataset else "no",
+        eval_strategy="steps" if val_dataset else "no",
         eval_steps=train_cfg.get("save_steps", 200) if val_dataset else None,
         load_best_model_at_end=True if val_dataset else False,
         metric_for_best_model="eval_loss" if val_dataset else None,

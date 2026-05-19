@@ -95,7 +95,7 @@ def encode_image_base64(image_path: str) -> str | None:
         with open(image_path, "rb") as f:
             return base64.b64encode(f.read()).decode("utf-8")
     except Exception as e:
-        print(f"  ⚠ 无法读取图片 {image_path}: {e}")
+        print(f"[WARN]无法读取图片 {image_path}: {e}")
         return None
 
 
@@ -165,7 +165,7 @@ class DashScopeBackend:
             )
             return response.output.choices[0].message.content[0]["text"].strip()
         except Exception as e:
-            print(f"  ⚠ DashScope API 调用失败: {e}")
+            print(f"[WARN]DashScope API 调用失败: {e}")
             return None
 
     def _generate_openai_compat(self, prompt: str, image_path: str) -> str | None:
@@ -206,7 +206,7 @@ class DashScopeBackend:
             )
             return resp.choices[0].message.content.strip()
         except Exception as e:
-            print(f"  ⚠ OpenAI 兼容 API 调用失败: {e}")
+            print(f"[WARN]OpenAI 兼容 API 调用失败: {e}")
             return None
 
 
@@ -216,10 +216,13 @@ class DashScopeBackend:
 class LocalBackend:
     """Generate responses using local Qwen2.5-VL-7B in 4-bit quantization."""
 
-    def __init__(self):
+    def __init__(self, model_path: str | None = None):
         self.model = None
         self.processor = None
-        self._lock = threading.Lock()  # GPU inference is single-threaded
+        project_root = Path(__file__).resolve().parent.parent.parent
+        default_path = project_root / "models" / "qwen2.5-vl-7b"
+        self.model_path = model_path or str(default_path)
+        self._lock = threading.Lock()
         self._load_model()
 
     def _load_model(self):
@@ -236,22 +239,25 @@ class LocalBackend:
             print("请安装: pip install torch transformers bitsandbytes accelerate qwen-vl-utils")
             sys.exit(1)
 
-        model_name = "Qwen/Qwen2.5-VL-7B-Instruct"
+        model_name = self.model_path if os.path.isdir(self.model_path) else "Qwen/Qwen2.5-VL-7B-Instruct"
 
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_compute_dtype=torch.float16,
             bnb_4bit_quant_type="nf4",
             bnb_4bit_use_double_quant=True,
+            llm_int8_enable_fp32_cpu_offload=True,
         )
 
         self.processor = AutoProcessor.from_pretrained(
             model_name, trust_remote_code=True
         )
+        max_memory = {0: "6GB", "cpu": "16GB"}
         self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
             model_name,
             quantization_config=bnb_config,
             device_map="auto",
+            max_memory=max_memory,
             trust_remote_code=True,
             torch_dtype=torch.float16,
         )
@@ -304,7 +310,7 @@ class LocalBackend:
                 )
                 return result.strip()
             except Exception as e:
-                print(f"  ⚠ 本地推理失败: {e}")
+                print(f"[WARN]本地推理失败: {e}")
                 return None
 
 
@@ -632,6 +638,12 @@ def main():
         help="使用本地 Qwen2.5-VL-7B 模型 (回退方案, 需要 GPU)",
     )
     parser.add_argument(
+        "--local-model-path",
+        type=str,
+        default=None,
+        help="本地模型路径 (默认: models/qwen2.5-vl-7b 相对于项目根)",
+    )
+    parser.add_argument(
         "--max-samples",
         type=int,
         default=None,
@@ -722,7 +734,7 @@ def main():
 
     # Initialize backend
     if args.use_local:
-        backend = LocalBackend()
+        backend = LocalBackend(model_path=args.local_model_path)
     else:
         backend = DashScopeBackend(api_key=api_key, model=args.model)
 
@@ -737,7 +749,7 @@ def main():
         workers=args.workers,
     )
 
-    print("\n✓ 生成完成")
+    print("\n[OK] 生成完成")
 
 
 if __name__ == "__main__":
