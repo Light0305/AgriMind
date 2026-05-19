@@ -261,7 +261,7 @@ export function useDiagnosis(): UseDiagnosisReturn {
    * Sends `{ action: "skip" }` over the WebSocket.
    */
   const skipToDebate = useCallback(() => {
-    ws.sendMessage({ action: 'skip' })
+    ws.sendMessage({ action: 'skip_all' })
 
     const skipMsg: ChatMessage = {
       id: nextId(),
