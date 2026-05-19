@@ -20,6 +20,48 @@
 
 ---
 
+## 下载与安装
+
+项目提供两种包：
+
+### 代码包（~5MB）
+
+包含所有源代码、前端、测试图片（50 张）、文档。**不含模型权重**。
+
+```bash
+git clone https://github.com/<your-org>/AgriMind.git
+cd AgriMind
+bash setup.sh  # 一键安装
+```
+
+> 代码包不含模型权重。首次运行时，系统自动使用 API 模式（需设置 `AGRIMIND_API_KEY`），或手动下载模型用于本地 GPU 模式。
+
+### 完整包（~16GB，含模型权重）
+
+包含代码 + 微调后的 AgriMind-v2 模型（8.29B 参数，bf16 格式），下载即可运行。
+
+**下载链接：**
+- [Hugging Face](https://huggingface.co/<your-org>/agrimind-v2)（推荐，免费不限速）
+- 百度网盘：[链接待上传]
+- 阿里云盘：[链接待上传]
+
+```bash
+# 下载后解压
+tar -xzf agrimind-full.tar.gz
+cd AgriMind
+
+# 本地 GPU 模式启动
+source venv/bin/activate
+cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+# 或 API 模式（无需 GPU）
+AGRIMIND_API_KEY=sk-xxx uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+> 推荐将完整包上传到 **Hugging Face**（免费、不限容量、支持 Git LFS 大文件），国内用户备用**百度网盘**。
+
+---
+
 ## 硬件要求
 
 | 最低配置 | 推荐配置 |
