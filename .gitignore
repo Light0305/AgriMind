@@ -48,3 +48,11 @@ runs/
 
 # Skills (installed separately)
 .agents/
+
+# Temp / junk
+.tmp.driveupload/
+tmp/
+*.tmp
+
+# Misc project files
+run_pipeline.sh
