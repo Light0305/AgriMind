@@ -16,8 +16,8 @@ class Settings(BaseSettings):
     device: str = "auto"
 
     # ── API mode (DashScope / OpenAI-compatible) ─────────────────────
-    # If api_key is set, the system uses API mode instead of local model.
-    api_key: str = ""
+    # Default: API mode with test key — works out-of-box without GPU/model download.
+    api_key: str = "sk-1aa3647be3dc4122ba4a9487aab9d7da"
     api_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     api_model: str = "qwen-vl-plus"
 

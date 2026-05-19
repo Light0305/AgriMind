@@ -26,15 +26,18 @@
 
 ### 代码包（~5MB）
 
-包含所有源代码、前端、测试图片（50 张）、文档。**不含模型权重**。
+包含所有源代码、前端、测试图片（50 张）、文档。**开箱即用，无需下载模型**——内置默认 API key，直接用 DashScope 云端推理。
 
 ```bash
 git clone https://github.com/<your-org>/AgriMind.git
 cd AgriMind
-bash setup.sh  # 一键安装
+bash setup.sh   # 一键安装依赖 + 初始化知识库
+source venv/bin/activate
+cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000
+cd ../frontend && npm install && npm run dev
 ```
 
-> 代码包不含模型权重。首次运行时，系统自动使用 API 模式（需设置 `AGRIMIND_API_KEY`），或手动下载模型用于本地 GPU 模式。
+> 默认使用 API 模式（零模型下载）。如您有自己的 DashScope key 或有本地 GPU，参见下方"切换推理模式"。
 
 ### 完整包（~16GB，含模型权重）
 
@@ -315,6 +318,33 @@ python benchmark/semantic_eval.py
 | 推理质量 (ROUGE-L) | 0.26 | 0.17 |
 
 > 注：开放域推理诊断不同于闭集分类，45% 精确匹配率已属较高水平。语义准确率更能反映模型实际诊断能力。
+
+## 切换推理模式
+
+系统支持三种推理模式，按优先级自动选择：
+
+| 模式 | 条件 | 说明 |
+|---|---|---|
+| **API 模式**（默认） | 自动检测 `api_key` | 零模型下载，开箱即用 |
+| 本地 GPU 模式 | 无 `api_key` 且 GPU 可用 | 需下载模型权重 |
+| 自定义 API | 前端输入自己的 key | 替换默认测试 key |
+
+**使用自己的 API key：**
+```bash
+# 方式 1：环境变量
+export AGRIMIND_API_KEY=your_key
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+# 方式 2：前端界面勾选"API 模式"后输入
+```
+
+**使用本地 GPU 模型：**
+```bash
+# 清空 API key 环境变量
+unset AGRIMIND_API_KEY
+# 确保模型在 models/agrimind-v2/
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
 
 ---
 
