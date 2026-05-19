@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import type { AgentMessage, AVDQuestion, AVDSufficient, ChatMessage, WSMessage, DebateResult } from '../types'
+import type { AgentMessage, ChatMessage, WSMessage, DebateResult } from '../types'
 
 /* ── Return type ────────────────────────────────────────── */
 
@@ -9,11 +9,8 @@ interface UseWebSocketReturn {
   result: DebateResult | null
   isConnected: boolean
   error: string | null
-  /** True once the server has sent "status: debating" */
   isDebating: boolean
-  /** True once the server has sent a "result" message */
   isComplete: boolean
-  /** Send a JSON payload over the WebSocket */
   sendMessage: (data: unknown) => void
 }
 
@@ -36,13 +33,21 @@ export function useWebSocket(sessionId: string | null, apiKey?: string): UseWebS
   const [error, setError] = useState<string | null>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
-  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const shouldReconnect = useRef(true)
   const apiKeyRef = useRef(apiKey)
   apiKeyRef.current = apiKey
+  const sessionIdRef = useRef(sessionId)
+  sessionIdRef.current = sessionId
 
-  const connect = useCallback(() => {
+  useEffect(() => {
     if (!sessionId) return
+
+    // Reset state
+    setAgentMessages([])
+    setChatMessages([])
+    setResult(null)
+    setError(null)
+    setIsDebating(false)
+    setIsComplete(false)
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
@@ -54,11 +59,7 @@ export function useWebSocket(sessionId: string | null, apiKey?: string): UseWebS
     ws.onopen = () => {
       setIsConnected(true)
       setError(null)
-      if (reconnectTimer.current) {
-        clearTimeout(reconnectTimer.current)
-        reconnectTimer.current = null
-      }
-      // Always send config message — empty key means local mode
+      // Always send config as first message
       ws.send(JSON.stringify({ type: 'config', api_key: apiKeyRef.current || '' }))
     }
 
@@ -74,7 +75,7 @@ export function useWebSocket(sessionId: string | null, apiKey?: string): UseWebS
           }
 
           case 'avd_question': {
-            const q = msg.data as AVDQuestion
+            const q = msg.data as { question: string }
             const chatMsg: ChatMessage = {
               id: nextChatId(),
               role: 'system',
@@ -86,13 +87,13 @@ export function useWebSocket(sessionId: string | null, apiKey?: string): UseWebS
           }
 
           case 'avd_sufficient': {
-            const s = msg.data as AVDSufficient
+            const s = msg.data as { summary: string; confidence: number; forced: boolean }
             const chatMsg: ChatMessage = {
               id: nextChatId(),
               role: 'system',
               content: s.forced
-                ? `信息采集已结束（用户跳过）。${s.summary}\n正在进入专家辩论阶段...`
-                : `信息采集完成（置信度 ${Math.round(s.confidence * 100)}%）。${s.summary}\n正在进入专家辩论阶段...`,
+                ? `${s.summary}\n正在进入专家辩论阶段...`
+                : `${s.summary}\n正在进入专家辩论阶段...`,
               timestamp: Date.now(),
             }
             setChatMessages((prev) => [...prev, chatMsg])
@@ -118,7 +119,6 @@ export function useWebSocket(sessionId: string | null, apiKey?: string): UseWebS
             setResult(msg.data as DebateResult)
             setIsComplete(true)
             setIsDebating(false)
-            shouldReconnect.current = false
             break
           }
 
@@ -129,52 +129,26 @@ export function useWebSocket(sessionId: string | null, apiKey?: string): UseWebS
           }
         }
       } catch {
-        // Legacy fallback: plain AgentMessage
-        try {
-          const agentMsg: AgentMessage = JSON.parse(event.data)
-          if (agentMsg.role && agentMsg.content) {
-            setAgentMessages((prev) => [...prev, agentMsg])
-          }
-        } catch {
-          console.warn('Failed to parse WebSocket message:', event.data)
-        }
+        console.warn('Failed to parse WebSocket message:', event.data)
       }
     }
 
     ws.onclose = () => {
       setIsConnected(false)
       wsRef.current = null
-      // Do NOT reconnect — interview + debate is a one-shot flow
     }
 
     ws.onerror = () => {
       ws.close()
     }
-  }, [sessionId])
 
-  useEffect(() => {
-    // Reset state when session changes
-    setAgentMessages([])
-    setChatMessages([])
-    setResult(null)
-    setError(null)
-    setIsDebating(false)
-    setIsComplete(false)
-    shouldReconnect.current = true
-
-    connect()
-
+    // Cleanup ONLY when sessionId changes (not on every render)
     return () => {
-      shouldReconnect.current = false
-      if (reconnectTimer.current) {
-        clearTimeout(reconnectTimer.current)
-      }
-      if (wsRef.current) {
-        wsRef.current.close()
-        wsRef.current = null
-      }
+      ws.close()
+      wsRef.current = null
     }
-  }, [connect])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId])  // ONLY depend on sessionId, nothing else
 
   const sendMessage = useCallback((data: unknown) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
