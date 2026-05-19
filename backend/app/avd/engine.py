@@ -39,23 +39,19 @@ class AVDEngine:
     "current_assessment": "叶片正面症状清晰，可见典型褐色同心轮纹，足以判断为番茄早疫病"
 }
 
-如果信息不足，将sufficient设为false，并在if_insufficient中说明需要补充什么：
+如果图片模糊或信息不足，将sufficient设为false：
 {
     "sufficient": false,
     "confidence": 0.5,
-    "current_assessment": "叶片正面有病斑但看不清细节",
+    "current_assessment": "图片不够清晰，无法看清关键症状特征",
     "if_insufficient": {
-        "question": "具体追问文字（请根据实际缺失内容生成，不要套用模板）",
-        "reason": "追问的科学依据",
-        "target_part": "需要拍摄的部位"
+        "question": "是否有更清晰或不同角度的图片？可以补充上传",
+        "reason": "当前图片细节不够，补充图片有助于准确诊断",
+        "target_part": "其他角度"
     }
 }
 
-关键规则：
-1. 如果图片症状清晰典型 → sufficient=true，不需要追问
-2. 如果图片模糊或关键特征不可见 → 追问具体缺失的部位
-3. 不要总是建议拍植株整体——除非确实需要看整体
-4. 追问必须针对当前图片中看不到的信息"""
+注意：if_insufficient里的question统一询问"是否有补充图片"，不要猜测具体需要哪个部位。"""
 
     def __init__(self, vlm: VLMInference) -> None:
         self.vlm = vlm
@@ -182,7 +178,7 @@ class AVDEngine:
                 status=AVDStatus.QUESTIONING,
                 confidence=0.3,
                 question=AVDQuestion(
-                    question="请换个角度再拍一张，当前图片信息不够清晰",
+                    question="是否有补充图片？可以上传其他角度的照片",
                     reason="无法解析评估结果",
                     target_part="其他角度",
                 ),
@@ -197,9 +193,9 @@ class AVDEngine:
                 status=AVDStatus.QUESTIONING,
                 confidence=0.3,
                 question=AVDQuestion(
-                    question="请补充拍摄病害部位的细节特写",
+                    question="是否有补充图片？可以上传其他角度的照片",
                     reason="评估结果格式异常，需要补充信息",
-                    target_part="病斑特写",
+                    target_part="其他角度",
                 ),
                 summary=response[:200] if response else "无法解析评估结果",
             )
