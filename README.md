@@ -24,44 +24,78 @@
 
 项目提供两种包：
 
-### 代码包（~5MB）
+### 代码包（~5MB，提交给比赛方）
 
 包含所有源代码、前端、测试图片（50 张）、文档。**开箱即用，无需下载模型**——内置默认 API key，直接用 DashScope 云端推理。
 
 ```bash
-git clone https://github.com/<your-org>/AgriMind.git
+git clone https://github.com/<your-username>/AgriMind.git
 cd AgriMind
-bash setup.sh   # 一键安装依赖 + 初始化知识库
-source venv/bin/activate
+
+# Linux / WSL / macOS
+bash setup.sh
+
+# Windows（双击运行）
+setup.bat
+
+# 启动后端
+source venv/bin/activate        # Linux/macOS
+venv\Scripts\activate           # Windows
 cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000
-cd ../frontend && npm install && npm run dev
+
+# 启动前端（新终端）
+cd frontend && npm install && npm run dev
 ```
 
 > 默认使用 API 模式（零模型下载）。如您有自己的 DashScope key 或有本地 GPU，参见下方"切换推理模式"。
+>
+> **GitHub 仓库地址说明**：请将 `<your-username>` 替换为您的 GitHub 用户名（如 `Light0305`）。创建仓库步骤：
+> 1. 注册/登录 [GitHub](https://github.com)
+> 2. 右上角 `+` → `New repository` → 名称填 `AgriMind` → 创建
+> 3. 运行 `git remote add origin https://github.com/<your-username>/AgriMind.git`
+> 4. 运行 `git push -u origin master`
 
 ### 完整包（~16GB，含模型权重）
 
-包含代码 + 微调后的 AgriMind-v2 模型（8.29B 参数，bf16 格式），下载即可运行。
+包含代码 + 微调后的 AgriMind-v2 模型（8.29B 参数，bf16 格式），下载解压即用——本地 GPU 推理，无需联网、不限额度。
 
 **下载链接：**
-- [Hugging Face](https://huggingface.co/<your-org>/agrimind-v2)（推荐，免费不限速）
-- 百度网盘：[链接待上传]
-- 阿里云盘：[链接待上传]
+- [Hugging Face](https://huggingface.co/<your-org>/agrimind-v2)（推荐，免费不限速，AI 模型标准平台）
+- [阿里云盘](<your-alipan-link>)（国内高速下载）
+- [百度网盘](<your-baiduyun-link>)（备用）
+
+**打包上传方法（任选一种）：**
+
+```bash
+# 方法 1：Hugging Face（推荐）
+# 1. 注册 https://huggingface.co/join
+# 2. 创建 Model repo: https://huggingface.co/new
+# 3. 安装 git-lfs: git lfs install
+# 4. 克隆并上传 models/agrimind-v2/ 下所有文件
+# 详细教程: https://huggingface.co/docs/hub/repositories-getting-started
+
+# 方法 2：阿里云盘
+# 1. 打开 https://www.alipan.com 登录
+# 2. 上传 models/agrimind-v2/ 文件夹
+# 3. 右键 → 分享 → 创建链接 → 粘贴到 README
+```
 
 ```bash
 # 下载后解压
 tar -xzf agrimind-full.tar.gz
 cd AgriMind
+bash setup.sh  # 或 setup.bat (Windows)
 
 # 本地 GPU 模式启动
-source venv/bin/activate
+unset AGRIMIND_API_KEY  # 清空 API key，自动切本地模式
 cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000
-
-# 或 API 模式（无需 GPU）
-AGRIMIND_API_KEY=sk-xxx uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-> 推荐将完整包上传到 **Hugging Face**（免费、不限容量、支持 Git LFS 大文件），国内用户备用**百度网盘**。
+### 附加数据包（~4GB，可选）
+
+包含 PlantVillage 原始图片（56K 张）、训练数据（6302 条 SFT）、benchmark 文件。仅用于复现实验或重新训练，**不下载不影响系统正常使用**。
+
+**下载链接：** 同完整包页面
 
 ---
 
