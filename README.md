@@ -82,39 +82,33 @@ set AGRIMIND_API_KEY=sk-your-key-here       # Windows
 
 ## 下载说明
 
-项目提供三个独立的下载包：
+项目提供三个独立的下载包，托管在 [Hugging Face](https://huggingface.co/LightChuan/AgriMind)：
 
-### 1. 代码包（~5MB）
+> **国内加速下载**：将下载链接中的 `huggingface.co` 替换为 `hf-mirror.com` 即可使用国内镜像，无需外网。
+
+### 1. 代码包（~1.3MB）
 
 包含完整源代码、前端、测试图片（50 张）和文档。使用 API 模式即可运行，无需下载模型。
 
 - **GitHub**: https://github.com/Light0305/AgriMind
-- **百度网盘**: [链接]
+- **下载**: https://huggingface.co/LightChuan/AgriMind/resolve/main/AgriMind-code.tar.gz
 
 ### 2. 完整包（~13GB）
 
 在代码包基础上，附带微调后的 AgriMind-v2 模型权重（Qwen2.5-VL-7B + QLoRA，8.29B 参数），支持本地 GPU 推理。
 
-- **百度网盘**: [链接]
+- **下载**: https://huggingface.co/LightChuan/AgriMind/resolve/main/AgriMind-full.tar.gz
 
-> 由于文件较大，完整包拆分为 4 个分卷上传。下载全部分卷后，合并解压：
-> ```bash
-> # Linux/macOS
-> cat AgriMind-full.tar.gz.part_* > AgriMind-full.tar.gz
-> tar -xzf AgriMind-full.tar.gz
->
-> # Windows (PowerShell)
-> cmd /c copy /b AgriMind-full.tar.gz.part_aa+AgriMind-full.tar.gz.part_ab+AgriMind-full.tar.gz.part_ac+AgriMind-full.tar.gz.part_ad AgriMind-full.tar.gz
-> tar -xzf AgriMind-full.tar.gz
-> ```
+下载后直接解压即可，模型文件位于 `models/agrimind-v2/` 目录下：
+```bash
+tar -xzf AgriMind-full.tar.gz
+```
 
-模型文件应位于 `models/agrimind-v2/` 目录下。
-
-### 3. 附加数据包（~312MB，可选）
+### 3. 附加数据包（~831MB，可选）
 
 包含 PlantVillage 原始图片（56K 张）、训练数据（6302 条 SFT）和 AgriReason 评测数据。仅用于复现实验或重新训练，**不影响系统正常使用**。
 
-- **百度网盘**: [链接]
+- **下载**: https://huggingface.co/LightChuan/AgriMind/resolve/main/AgriMind-data.tar.gz
 
 ---
 
