@@ -29,7 +29,7 @@
 包含所有源代码、前端、测试图片（50 张）、文档。**开箱即用，无需下载模型**——内置默认 API key，直接用 DashScope 云端推理。
 
 ```bash
-git clone https://github.com/<your-username>/AgriMind.git
+git clone https://github.com/Light0305/AgriMind.git
 cd AgriMind
 
 # Linux / WSL / macOS
@@ -60,7 +60,7 @@ cd frontend && npm install && npm run dev
 包含代码 + 微调后的 AgriMind-v2 模型（8.29B 参数，bf16 格式），下载解压即用——本地 GPU 推理，无需联网、不限额度。
 
 **下载链接：**
-- [Hugging Face](https://huggingface.co/<your-org>/agrimind-v2)（推荐，免费不限速，AI 模型标准平台）
+- [Hugging Face](https://huggingface.co/Light0305/agrimind-v2)（推荐，免费不限速，AI 模型标准平台）
 - [阿里云盘](<your-alipan-link>)（国内高速下载）
 - [百度网盘](<your-baiduyun-link>)（备用）
 
