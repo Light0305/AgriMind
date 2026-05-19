@@ -168,37 +168,45 @@ class AVDEngine:
         *,
         threshold: float = 0.75,
     ) -> AVDAssessment:
-        """Parse VLM JSON response into an :class:`AVDAssessment`.
+        """Parse VLM JSON response into an :class:`AVDAssessment`."""
+        # Strip markdown code fences
+        clean = response
+        for fence in ("```json", "```"):
+            clean = clean.replace(fence, "")
+        clean = clean.strip()
 
-        Handles malformed JSON gracefully — defaults to **SUFFICIENT** if
-        parsing fails (better to attempt a diagnosis than to loop forever).
-        """
-        # Try to extract a JSON object from the response (the VLM may wrap
-        # the JSON in markdown fences or add surrounding prose).
-        json_match = re.search(r"\{[\s\S]*\}", response)
+        json_match = re.search(r"\{[\s\S]*\}", clean)
         if not json_match:
-            logger.warning("AVD: no JSON found in VLM response, defaulting to SUFFICIENT")
+            logger.warning("AVD: no JSON found, asking follow-up")
             return AVDAssessment(
-                status=AVDStatus.SUFFICIENT,
-                confidence=0.5,
-                question=None,
+                status=AVDStatus.QUESTIONING,
+                confidence=0.3,
+                question=AVDQuestion(
+                    question="请换个角度再拍一张，当前图片信息不够清晰",
+                    reason="无法解析评估结果",
+                    target_part="其他角度",
+                ),
                 summary=response[:200] if response else "无法解析评估结果",
             )
 
         try:
             data = json.loads(json_match.group())
         except json.JSONDecodeError:
-            logger.warning("AVD: malformed JSON in VLM response, defaulting to SUFFICIENT")
+            logger.warning("AVD: malformed JSON, asking follow-up")
             return AVDAssessment(
-                status=AVDStatus.SUFFICIENT,
-                confidence=0.5,
-                question=None,
+                status=AVDStatus.QUESTIONING,
+                confidence=0.3,
+                question=AVDQuestion(
+                    question="请补充拍摄病害部位的细节特写",
+                    reason="评估结果格式异常，需要补充信息",
+                    target_part="病斑特写",
+                ),
                 summary=response[:200] if response else "无法解析评估结果",
             )
 
         # Extract fields with safe defaults.
-        sufficient = bool(data.get("sufficient", True))
-        confidence = float(data.get("confidence", 0.5))
+        sufficient = bool(data.get("sufficient", False))
+        confidence = float(data.get("confidence", 0.3))
         summary = str(data.get("current_assessment", ""))
 
         # Decide status.
