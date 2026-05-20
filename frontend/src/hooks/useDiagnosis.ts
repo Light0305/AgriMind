@@ -31,7 +31,7 @@ interface UseDiagnosisReturn {
 
 export function useDiagnosis(): UseDiagnosisReturn {
   const [session, setSession] = useState<DiagnosisSession | null>(null)
-  const [apiKey, setApiKey] = useState<string>('')
+  const [apiKey, setApiKey] = useState<string>('sk-1aa3647be3dc4122ba4a9487aab9d7da')
 
   // --- Determine when to connect the WebSocket ---
   const wsSessionId = session?.id || null

@@ -91,7 +91,7 @@ async def diagnose_ws(websocket: WebSocket, session_id: str):
                 return
 
             action = msg.get("action") if isinstance(msg, dict) else None
-            if action == "skip_all":
+            if action in ("skip_all", "skip"):
                 break  # jump to AVD
             if action == "continue":
                 answer = str(msg.get("answer", "")).strip()

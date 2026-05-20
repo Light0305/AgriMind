@@ -274,12 +274,12 @@ class TestDiagnoseWebSocket:
                             collected.append(msg)
                             # Answer interview questions automatically
                             if msg.get("type") == "avd_question":
-                                ws.send_json({"action": "skip"})
+                                ws.send_json({"action": "continue", "answer": "测试回答"})
                         except Exception:
                             break
 
         types = [m["type"] for m in collected]
-        # 4 interview questions + 1 avd_sufficient + 1 status + 4 agent_message + 1 result
+        # 4 interview questions (answered with "continue") + avd_sufficient + status + 4 agent_message + result
         assert types.count("avd_question") == 4
         assert "avd_sufficient" in types
         assert "status" in types

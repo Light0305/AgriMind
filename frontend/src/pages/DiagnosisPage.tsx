@@ -67,7 +67,7 @@ export default function DiagnosisPage() {
             checked={!!apiKey}
             onChange={(e) => {
               if (e.target.checked) {
-                setApiKey('请输入API Key')
+                setApiKey('sk-1aa3647be3dc4122ba4a9487aab9d7da')
               } else {
                 setApiKey('')
               }
@@ -79,7 +79,7 @@ export default function DiagnosisPage() {
         {apiKey && (
           <input
             type="text"
-            value={apiKey === '请输入API Key' ? '' : apiKey}
+            value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             placeholder="输入 DashScope API Key (sk-...)"
             className="flex-1 px-2 py-1 border rounded text-xs font-mono"
