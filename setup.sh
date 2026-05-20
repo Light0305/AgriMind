@@ -177,6 +177,13 @@ fi
 
 echo "  Installing backend packages..."
 pip install -q -r backend/requirements.txt
+
+# GPU-only packages (needed for local 4-bit model loading)
+if $HAS_GPU; then
+  echo "  Installing GPU quantization packages..."
+  pip install -q bitsandbytes>=0.43.0 peft>=0.12.0 2>/dev/null || \
+    echo -e "${YELLOW}  Warning: bitsandbytes install failed. Local 4-bit mode may not work.${NC}"
+fi
 echo "  Backend dependencies installed."
 
 # ── 5. Frontend dependencies ──────────────────────────────

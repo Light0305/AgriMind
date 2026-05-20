@@ -51,7 +51,8 @@ export function useWebSocket(sessionId: string | null, apiKey?: string): UseWebS
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
-    const url = `${protocol}//${host}/ws/diagnose/${sessionId}`
+    const keyParam = apiKeyRef.current ? `?api_key=${encodeURIComponent(apiKeyRef.current)}` : ''
+    const url = `${protocol}//${host}/ws/diagnose/${sessionId}${keyParam}`
 
     const ws = new WebSocket(url)
     wsRef.current = ws

@@ -85,6 +85,14 @@ if %errorlevel% neq 0 (
 
 echo   Installing backend packages...
 python -m pip install --quiet -r backend\requirements.txt
+
+REM GPU-only packages (needed for local 4-bit model loading)
+python -c "import torch; assert torch.cuda.is_available()" 2>nul
+if %errorlevel% equ 0 (
+    echo   GPU detected, installing quantization packages...
+    python -m pip install --quiet bitsandbytes peft 2>nul
+    if %errorlevel% neq 0 echo   Warning: bitsandbytes install failed. Local 4-bit mode may not work.
+)
 echo   Backend dependencies installed.
 
 REM == Step 5: Frontend ==

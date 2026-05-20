@@ -24,13 +24,24 @@ async def lifespan(app: FastAPI):
     startup is fast — the heavy weight load happens on the first actual
     inference request.
     """
+    import os
+
     vlm = VLMInference.from_config(settings)
-    if not vlm._use_api:
+    if vlm._use_api:
+        logger.info("API mode (env key) — skipping model pre-load")
+    elif os.path.isdir(settings.model_path):
         logger.info("Pre-loading local VLM model (this takes ~5s)...")
         vlm._load_local()  # eager-load to avoid first-request timeout
         logger.info("Model pre-loaded successfully")
     else:
-        logger.info("API mode — skipping model pre-load")
+        # No API key in env AND no local model — that's fine.
+        # Users can still pass api_key via WebSocket query params at runtime.
+        logger.warning(
+            "No API key set and local model not found at '%s'. "
+            "Server will start but requires client to provide API key via WebSocket.",
+            settings.model_path,
+        )
+        vlm = None  # WebSocket handler will create per-request VLM with client key
     app.state.vlm = vlm
     yield
     logger.info("AgriMind shutting down")
