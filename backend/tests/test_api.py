@@ -264,9 +264,8 @@ class TestDiagnoseWebSocket:
             orch_instance.run_debate = AsyncMock(side_effect=fake_run_debate)
 
             with TestClient(app) as tc:
-                with tc.websocket_connect(f"/ws/diagnose/{sid}") as ws:
-                    # Send config message (required by new protocol)
-                    ws.send_json({"type": "config", "api_key": ""})
+                with tc.websocket_connect(f"/ws/diagnose/{sid}?api_key=test-key") as ws:
+                    pass  # api_key in query param triggers per-request VLM
 
                     collected = []
                     while True:
