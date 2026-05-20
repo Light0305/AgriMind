@@ -74,23 +74,23 @@ call venv\Scripts\activate.bat
 
 REM == Step 4: Backend dependencies ==
 echo [4/5] Installing Python dependencies (this may take a few minutes)...
-python -m pip install --quiet --upgrade pip
+python -m pip install --upgrade pip
 
 echo   Installing PyTorch...
-python -m pip install --quiet torch torchvision 2>nul
+python -m pip install torch torchvision 2>nul
 if %errorlevel% neq 0 (
     echo   GPU version failed, installing CPU version...
-    python -m pip install --quiet torch torchvision --index-url https://download.pytorch.org/whl/cpu
+    python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 )
 
 echo   Installing backend packages...
-python -m pip install --quiet -r backend\requirements.txt
+python -m pip install -r backend\requirements.txt
 
 REM GPU-only packages (needed for local 4-bit model loading)
 python -c "import torch; assert torch.cuda.is_available()" 2>nul
 if %errorlevel% equ 0 (
     echo   GPU detected, installing quantization packages...
-    python -m pip install --quiet bitsandbytes peft 2>nul
+    python -m pip install bitsandbytes peft 2>nul
     if %errorlevel% neq 0 echo   Warning: bitsandbytes install failed. Local 4-bit mode may not work.
 )
 echo   Backend dependencies installed.
@@ -100,7 +100,7 @@ echo [5/5] Installing frontend dependencies...
 where node >nul 2>&1
 if %errorlevel% neq 0 goto :no_frontend
 pushd frontend
-call npm install --silent 2>nul
+call npm install 2>nul
 popd
 echo   Frontend dependencies installed.
 goto :post_install

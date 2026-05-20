@@ -159,7 +159,7 @@ source venv/bin/activate
 
 # ── 4. Backend dependencies ───────────────────────────────
 echo -e "${GREEN}[4/5] Installing Python dependencies...${NC}"
-pip install -q --upgrade pip
+pip install --upgrade pip
 
 # Detect NVIDIA GPU
 HAS_GPU=false
@@ -169,19 +169,19 @@ fi
 
 if $HAS_GPU; then
   echo "  NVIDIA GPU detected. Installing PyTorch with CUDA..."
-  pip install -q torch torchvision
+  pip install torch torchvision
 else
   echo "  No GPU detected. Installing PyTorch CPU version (API mode only)..."
-  pip install -q torch torchvision --index-url https://download.pytorch.org/whl/cpu
+  pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 fi
 
 echo "  Installing backend packages..."
-pip install -q -r backend/requirements.txt
+pip install -r backend/requirements.txt
 
 # GPU-only packages (needed for local 4-bit model loading)
 if $HAS_GPU; then
   echo "  Installing GPU quantization packages..."
-  pip install -q bitsandbytes>=0.43.0 peft>=0.12.0 2>/dev/null || \
+  pip install bitsandbytes>=0.43.0 peft>=0.12.0 2>/dev/null || \
     echo -e "${YELLOW}  Warning: bitsandbytes install failed. Local 4-bit mode may not work.${NC}"
 fi
 echo "  Backend dependencies installed."
@@ -190,7 +190,7 @@ echo "  Backend dependencies installed."
 echo -e "${GREEN}[5/5] Installing frontend dependencies...${NC}"
 if [ "$NODE_OK" = true ]; then
   pushd frontend > /dev/null
-  npm install --silent 2>/dev/null || npm install
+  npm install 2>/dev/null || npm install
   popd > /dev/null
   echo "  Frontend dependencies installed."
 else
