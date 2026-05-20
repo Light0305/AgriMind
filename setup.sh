@@ -3,7 +3,6 @@
 #   AgriMind - One-Click Setup
 #   Supports Linux / WSL2 / macOS
 # ============================================================
-set -e
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 
@@ -34,10 +33,11 @@ echo -e "${GREEN}[1/5] Checking Python...${NC}"
 PYTHON=""
 for py in python3.12 python3.11 python3.10 python3; do
   if command -v "$py" &>/dev/null; then
-    PY_VER=$("$py" --version 2>&1 | grep -oP '\d+\.\d+' | head -1)
+    # Portable version extraction (works on macOS BSD grep + Linux GNU grep)
+    PY_VER=$("$py" --version 2>&1 | sed -n 's/.*Python \([0-9]*\.[0-9]*\).*/\1/p')
     PY_MAJOR=$(echo "$PY_VER" | cut -d. -f1)
     PY_MINOR=$(echo "$PY_VER" | cut -d. -f2)
-    if [ "$PY_MAJOR" -ge 3 ] && [ "$PY_MINOR" -ge 10 ]; then
+    if [ -n "$PY_MAJOR" ] && [ "$PY_MAJOR" -ge 3 ] 2>/dev/null && [ "$PY_MINOR" -ge 10 ] 2>/dev/null; then
       PYTHON="$py"; break
     fi
   fi
@@ -46,7 +46,6 @@ done
 if [ -z "$PYTHON" ]; then
   echo -e "${YELLOW}  Python 3.10+ not found. Attempting to install...${NC}"
   if command -v apt-get &>/dev/null; then
-    # Debian/Ubuntu: try deadsnakes PPA for newer Python
     sudo apt-get update -qq
     if apt-cache show python3.11 &>/dev/null 2>&1; then
       sudo apt-get install -y python3.11 python3.11-venv python3.11-dev
@@ -55,7 +54,6 @@ if [ -z "$PYTHON" ]; then
       sudo apt-get install -y python3.10 python3.10-venv python3.10-dev
       PYTHON=python3.10
     else
-      # Try adding deadsnakes PPA
       sudo apt-get install -y software-properties-common
       sudo add-apt-repository -y ppa:deadsnakes/ppa
       sudo apt-get update -qq
@@ -63,21 +61,20 @@ if [ -z "$PYTHON" ]; then
       PYTHON=python3.11
     fi
   elif command -v dnf &>/dev/null; then
-    sudo dnf install -y python3.11 python3.11-devel || sudo dnf install -y python3
-    PYTHON=$(command -v python3.11 || command -v python3)
+    sudo dnf install -y python3.11 python3.11-devel 2>/dev/null || sudo dnf install -y python3 python3-devel
+    PYTHON=$(command -v python3.11 2>/dev/null || command -v python3)
   elif command -v pacman &>/dev/null; then
     sudo pacman -S --noconfirm python
     PYTHON=python3
   elif command -v brew &>/dev/null; then
     brew install python@3.12
-    PYTHON=$(brew --prefix python@3.12)/bin/python3.12
+    PYTHON="$(brew --prefix python@3.12)/bin/python3.12"
   else
     echo -e "${RED}  [ERROR] Cannot auto-install Python. No supported package manager found.${NC}"
     echo "  Please install Python 3.10+ manually: https://www.python.org/downloads/"
     exit 1
   fi
 
-  # Verify installation
   if [ -z "$PYTHON" ] || ! command -v "$PYTHON" &>/dev/null; then
     echo -e "${RED}  [ERROR] Python installation failed.${NC}"
     echo "  Please install Python 3.10+ manually: https://www.python.org/downloads/"
@@ -86,7 +83,21 @@ if [ -z "$PYTHON" ]; then
 fi
 echo "  $($PYTHON --version)"
 
-# ── 2. Node.js ────────────────────────────────────────────
+# Ensure venv module is available (common issue on Debian/Ubuntu)
+if ! $PYTHON -m venv --help &>/dev/null; then
+  echo "  Installing python3-venv package..."
+  PY_SHORT=$($PYTHON --version 2>&1 | sed -n 's/.*Python \([0-9]*\.[0-9]*\).*/\1/p')
+  if command -v apt-get &>/dev/null; then
+    sudo apt-get install -y "python${PY_SHORT}-venv" 2>/dev/null || sudo apt-get install -y python3-venv
+  fi
+  if ! $PYTHON -m venv --help &>/dev/null; then
+    echo -e "${RED}  [ERROR] python3-venv not available. Please install it manually:${NC}"
+    echo "  sudo apt-get install python${PY_SHORT}-venv"
+    exit 1
+  fi
+fi
+
+# ── 2. Node.js (optional - only needed for frontend) ─────
 echo -e "${GREEN}[2/5] Checking Node.js...${NC}"
 NODE_OK=false
 if command -v node &>/dev/null; then
@@ -101,36 +112,38 @@ fi
 
 if [ "$NODE_OK" = false ]; then
   echo "  Node.js 18+ not found. Attempting to install..."
-  if command -v apt-get &>/dev/null; then
-    # NodeSource for Debian/Ubuntu
-    if ! command -v curl &>/dev/null; then
-      sudo apt-get update -qq && sudo apt-get install -y curl
+  # Node.js install is best-effort; failure should not kill the script
+  (
+    set +e
+    if command -v apt-get &>/dev/null; then
+      if ! command -v curl &>/dev/null; then
+        sudo apt-get update -qq && sudo apt-get install -y curl
+      fi
+      curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt-get install -y nodejs
+    elif command -v dnf &>/dev/null; then
+      if ! command -v curl &>/dev/null; then
+        sudo dnf install -y curl
+      fi
+      curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash - && sudo dnf install -y nodejs
+    elif command -v pacman &>/dev/null; then
+      sudo pacman -S --noconfirm nodejs npm
+    elif command -v brew &>/dev/null; then
+      brew install node@20
     fi
-    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-    sudo apt-get install -y nodejs
-  elif command -v dnf &>/dev/null; then
-    if ! command -v curl &>/dev/null; then
-      sudo dnf install -y curl
-    fi
-    curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
-    sudo dnf install -y nodejs
-  elif command -v pacman &>/dev/null; then
-    sudo pacman -S --noconfirm nodejs npm
-  elif command -v brew &>/dev/null; then
-    brew install node@20
-    export PATH="$(brew --prefix node@20)/bin:$PATH"
-  else
-    echo -e "${YELLOW}  [INFO] Cannot auto-install Node.js. Frontend will not be set up.${NC}"
-    echo "  Please install Node.js 18+ manually: https://nodejs.org/"
-  fi
+  ) 2>/dev/null
 
-  # Re-check
+  # Re-check after install attempt
   if command -v node &>/dev/null; then
     NODE_VER=$(node -v | sed 's/v//' | cut -d. -f1)
     if [ "$NODE_VER" -ge 18 ] 2>/dev/null; then
       NODE_OK=true
       echo "  Node.js $(node -v) installed successfully."
     fi
+  fi
+
+  if [ "$NODE_OK" = false ]; then
+    echo -e "${YELLOW}  [INFO] Node.js 18+ not available. Frontend will not be set up.${NC}"
+    echo "  Install manually if needed: https://nodejs.org/"
   fi
 fi
 
@@ -150,7 +163,7 @@ pip install -q --upgrade pip
 
 # Detect NVIDIA GPU
 HAS_GPU=false
-if command -v nvidia-smi &>/dev/null; then
+if command -v nvidia-smi &>/dev/null && nvidia-smi &>/dev/null; then
   HAS_GPU=true
 fi
 
@@ -170,7 +183,7 @@ echo "  Backend dependencies installed."
 echo -e "${GREEN}[5/5] Installing frontend dependencies...${NC}"
 if [ "$NODE_OK" = true ]; then
   pushd frontend > /dev/null
-  npm install --silent 2>/dev/null
+  npm install --silent 2>/dev/null || npm install
   popd > /dev/null
   echo "  Frontend dependencies installed."
 else
